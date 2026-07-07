@@ -72,6 +72,10 @@ literal `on.push.paths` filter (Actions forbids variables there), and the
 python -m hureva.scaffold --into . --specs-dir specs
 ```
 
+> **New to this? See [`SETUP.md`](SETUP.md)** for a detailed, step-by-step install
+> into an existing repo — local CLI install, scaffolding, roster, Slack app +
+> secrets, committing the caller workflow, connecting GitBook, and a first spec.
+
 This writes `roster.yml`, `defaults.yml`, `spec.template.md`, the caller workflow
 (`.github/workflows/spec-review.yml`, referencing the published `@v1` reusable
 workflows), `CLAUDE.md`, and the `/new-spec` command. It refuses to overwrite
