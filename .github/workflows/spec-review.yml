@@ -1,0 +1,38 @@
+# Spec review & approval — a plain workflow that installs the versioned package
+# and runs it. Copy this into your repo (it stays static; all behavior lives in
+# the `hureva` package, which you version via the pip line below).
+#
+# In this repo it also serves as our own dogfood, so it installs the released
+# package like any consumer would.
+name: spec-review
+
+on:
+  push:
+    branches: ["spec/**"]     # status changes happen on spec branches (§7.4)
+    paths: ["specs/**"]       # ...and only when something under specs/ changed
+
+jobs:
+  spec-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # both push commits reachable for transition detection (§7.4)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "hureva~=1.0"     # ← version pin lives here
+      # Notify reviewers, then gate the changed specs. The runner provides
+      # GITHUB_EVENT_PATH automatically (used for the before/after commits).
+      - run: hureva-notify --specs-dir specs
+        env:
+          # A channel is used only if its secret is set.
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      # Advisory by default; add --enforced to block un-approved specs (§6.3) and
+      # make this job a required check with branch protection.
+      - run: hureva-gate --changed --specs-dir specs

@@ -1,9 +1,0 @@
-# Central team roster (spec §4.3): the only place channels are defined.
-# People are referenced everywhere by their key here (name-only); a name missing
-# from this file fails loudly rather than silently. Slack is used if present,
-# else email.
-people:
-  chris:   { email: chris@acme.com, slack: "@chris" }
-  elena:   { email: elena@acme.com, slack: "@elena" }
-  sam:     { email: sam@acme.com,   slack: "@sam" }
-  qa-team: { slack: "#qa" }        # a group is fine; email optional

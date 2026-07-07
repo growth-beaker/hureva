@@ -1,129 +1,138 @@
 # hureva
 
-The portable core of the **spec review & approval workflow** described in
-[`docs/spec-review-workflow-specification.md`](docs/spec-review-workflow-specification.md).
+A **spec review & approval workflow** you install into your team's repo: generate
+specs with Claude, get structured review from non-technical teammates (PM, UX, QA)
+**before code is written**, and record approval in git so it can gate the build.
+Based on [`docs/spec-review-workflow-specification.md`](docs/spec-review-workflow-specification.md).
 
-This is the canonical **approval & gate layer** (spec §3) — the load-bearing spine
-that holds the system's semantics. The GitHub Actions (a later build step) wrap
-this library; they do **not** reimplement its logic (spec §0, decision 13).
+hureva is a **versioned package teams install, not copy**. Your specs live in your
+own repo under `specs/`; you add a small workflow that `pip install`s a pinned
+version of `hureva` and runs it, plus a bit of config. Nothing is hosted, and none
+of hureva's code lives in your repo.
 
-> **Scope:** this repository currently contains only the core library (the first
-> step in the spec's build order). The reusable workflows, template repo, and
-> scaffolder are future steps — see `plan.md`.
+> **Installing it? See [`SETUP.md`](SETUP.md)** for the step-by-step guide.
 
-## What it does
+## How it works
+
+- The spec is a `spec.md` whose **frontmatter is the contract** (§4.2): `status`,
+  role-based access (`owner`/`approvers`/`commenters`/`viewers`), and the sign-off
+  trail. People are named by **roster key**; channels resolve from `specs/roster.yml`.
+- Work happens on a `spec/<slug>` branch. Pushing a status change fires the
+  workflow, which compares the spec's `status` across the push's two commits and
+  acts only on a transition (§7.4).
+- `draft → in_review` notifies reviewers; `→ approved` tells the owner "ready to
+  build." The gate is advisory by default and can be hardened to block
+  un-approved specs (§6.3).
+
+## Library
 
 | Piece | Module | Spec |
 |---|---|---|
 | Frontmatter / roster / defaults models | `hureva.models` | §4.2–4.4 |
 | Frontmatter parsing (+ lenient `status` reader) | `hureva.frontmatter` | §4.2 |
-| `specs_dir`-derived paths, config loading, defaults seeding | `hureva.config` | §4.1, §4.4, §13.5 |
+| `specs_dir`-derived paths, config, defaults seeding | `hureva.config` | §4.1, §4.4 |
 | Two-commit transition detection (pure fn) | `hureva.transitions` | §7.4 |
+| Changed-spec discovery from a push | `hureva.discovery` | §7.4 |
 | Event → role → person → channel routing | `hureva.routing` | §7.1 |
-| Sender interface + dry-run + Slack + SMTP | `hureva.senders` | §7.3, §12.4 |
+| Sender interface + dry-run + Slack + SMTP | `hureva.senders` | §7.3 |
 | Notify orchestration + CLI | `hureva.notify` | §7 |
 | Status gate + CLI (advisory / enforced) | `hureva.gate` | §6 |
+| Create a spec + branch (`/new-spec`) | `hureva.new_spec` | §14.2 |
 
-Design seams that keep a future hosted service additive (spec §12.4): the logic is
-a pure library (git/env reading is a thin shell), delivery is behind a `Sender`
-interface, events are a defined schema, and `specs_dir` is per-tenant data — no
-path is ever hard-coded.
+The logic is a pure library (git/env reading is a thin shell), delivery is behind
+a `Sender` interface, and the specs path is configurable — nothing hard-codes
+`specs`.
 
-## Install & test
+## How teams install it
+
+hureva is a **PyPI package** (`hureva`), published on each GitHub Release. The
+fastest path is to scaffold the setup, then follow the printed checklist:
+
+```bash
+pip install hureva
+hureva-init            # writes the workflow + config, prints next steps
+```
+
+Under the hood that adds one small, static workflow that installs the versioned
+package and runs its two commands — notify, then gate:
+
+```yaml
+# team-repo/.github/workflows/spec-review.yml
+on:
+  push:
+    branches: ["spec/**"]     # status changes happen on spec branches (§7.4)
+    paths: ["specs/**"]       # (literal — Actions can't use a variable here)
+jobs:
+  spec-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # both push commits reachable (§7.4)
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "hureva~=1.0"                 # ← version pin lives here
+      - run: hureva-notify --specs-dir specs
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # SMTP_* too, if using email
+      - run: hureva-gate --changed --specs-dir specs   # add --enforced to block
+```
+
+Nothing of hureva's code lives in the team repo — the workflow is generic "install
+a tool and run it" plumbing, and all behavior is in the versioned package.
+
+### Versioning — pin the package
+
+`pip install "hureva~=1.0"` is the version pin (like `"hureva": "^1.0"` in a
+dependency list). It's the alternative to copying hureva's code in (which drifts
+and never gets fixes): you install a released version.
+
+- `~=1.0` takes any 1.x release, so compatible fixes flow in automatically.
+- Pin exactly with `==1.2.3`; move to the next major (`~=2.0`) when *you* choose,
+  after reading its release notes.
+
+## CLIs
+
+Commands (also runnable as `python -m hureva.<module>`). The operational ones take
+`--specs-dir` (default `specs`).
+
+```bash
+# One-time: scaffold the workflow + config into this repo, print next steps
+hureva-init
+
+# Create a spec + its spec/<slug> branch (seeds roles from defaults.yml)
+hureva-new-spec <slug> --title "Feature title"
+
+# Route notifications for a push (--dry-run prints without delivering)
+hureva-notify --dry-run
+
+# Gate the specs changed in a push
+hureva-gate --changed                # advisory (exit 0)
+hureva-gate --changed --enforced     # block if not approved
+hureva-gate <slug> --require-all-approvers   # gate one spec by slug
+```
+
+`hureva-notify` / `hureva-gate --changed` read the GitHub push event
+(`$GITHUB_EVENT_PATH`, set by the runner; or `--event-file`) to get the
+`before`/`after` commits. Recipients come from the spec's frontmatter roles; each
+channel resolves from `roster.yml` (Slack if present, else email). A name missing
+from the roster is reported loudly, never dropped silently.
+
+## Channels
+
+Delivery is enabled by the environment (§13.6):
+
+- **Slack** — set `SLACK_BOT_TOKEN`. Handles: `#channel`, a member ID (`U…`), or an
+  email (DM resolved via `users.lookupByEmail`).
+- **SMTP email** — set `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
+  `SMTP_FROM`). Optional; a Slack-only team just doesn't set it.
+
+A channel is used only if its secret is present. `--dry-run` needs no credentials.
+
+## Develop
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
-
-## CLIs
-
-Both take `--specs-dir` (default `specs`) so nothing hard-codes the path.
-
-```bash
-# Notify: detect the transition in a push and route notifications.
-# --dry-run prints who would be notified without delivering.
-python -m hureva.notify --specs-dir specs --dry-run
-
-# Gate: read a spec's status and decide whether the build is cleared.
-python -m hureva.gate <slug> --specs-dir specs              # advisory (exit 0)
-python -m hureva.gate <slug> --specs-dir specs --enforced   # block if not approved
-python -m hureva.gate <slug> --specs-dir specs --enforced --require-all-approvers
-```
-
-`hureva.notify` reads a GitHub push event (`$GITHUB_EVENT_PATH`, or `--event-file`)
-to get the `before`/`after` commits, then compares `status` across them — firing
-`ready_for_review` on `→ in_review` and `approved` on `→ approved`, and nothing on
-a body-only edit (the dedup). Recipients come from the spec's frontmatter roles;
-each channel is resolved from `roster.yml` (Slack if present, else email). A name
-missing from the roster is reported loudly, never dropped silently.
-
-## Scaffolding a team repo
-
-A team installs by materializing the template into its repo and answering one
-question — `specs_dir` (spec §13.5). That single answer is written into all three
-places that consume it: the caller workflow's `with:` inputs, the caller's literal
-`on.push.paths` filter (Actions forbids variables there), and the `CLAUDE.md` /
-`/new-spec` guidance.
-
-```bash
-# into the current repo, default specs/ ; or pass --specs-dir docs/specs
-python -m hureva.scaffold --into . --specs-dir specs
-```
-
-This writes `roster.yml`, `defaults.yml`, `spec.template.md`, the caller workflow,
-`CLAUDE.md`, and the `/new-spec` command. The committed `template/` directory is a
-pre-rendered snapshot of this (default `specs`) so the repo can also be used via
-GitHub's "Use this template".
-
-Creating a spec (what `/new-spec` runs):
-
-```bash
-python -m hureva.new_spec <slug> --title "Feature title" --specs-dir specs
-```
-
-It reads `defaults.yml`, seeds the frontmatter roles (overrides win, unset roles
-inherit — §4.4), writes `<specs_dir>/<slug>/spec.md`, and creates the `spec/<slug>`
-branch. Bare Claude Code, `/new-spec`, and hand authoring all reach the same
-conformant spec.
-
-## Reusable workflows
-
-`.github/workflows/notify.yml` and `.github/workflows/status-gate.yml` are
-`workflow_call` reusable workflows (spec §13.7). A tenant repo references them by
-tag and passes its `specs_dir`; each one checks out the caller's repo, installs
-this library at a pinned ref, and runs the matching CLI. They are thin wrappers —
-no logic lives in the YAML.
-
-A tenant caller (`.github/workflows/spec-review.yml`), with the literal specs
-path written in at scaffold time:
-
-```yaml
-on:
-  push:
-    branches: ["spec/**"]      # status changes happen on spec branches (§7.4)
-    paths: ["specs/**"]        # literal path, written by the scaffolder
-jobs:
-  notify:
-    uses: growth-beaker/hureva/.github/workflows/notify.yml@v1
-    with: { specs_dir: specs }
-    secrets: inherit
-  gate:
-    uses: growth-beaker/hureva/.github/workflows/status-gate.yml@v1
-    with: { specs_dir: specs }   # add `enforced: true` to block un-approved specs
-    secrets: inherit
-```
-
-The `notify` job needs `fetch-depth: 0` for two-commit transition detection — the
-reusable workflow sets that itself, so the caller doesn't have to.
-
-## Channels
-
-Delivery is enabled by the environment (spec §13.6):
-
-- **Slack** — set `SLACK_BOT_TOKEN` (DMs resolve via `users.lookupByEmail`).
-- **SMTP email** — set `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
-  `SMTP_FROM`, `SMTP_TLS`). Optional; a team without SMTP simply doesn't set it.
-
-`--dry-run` needs no credentials at all.

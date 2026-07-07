@@ -5,12 +5,12 @@ argument-hint: <slug> "<Feature title>"
 
 Create a new spec for `$ARGUMENTS`.
 
-Run the scaffolder, which reads `specs/defaults.yml`, seeds the frontmatter
+Run the command below, which reads `specs/defaults.yml`, seeds the frontmatter
 roles, writes `specs/<slug>/spec.md` from the template, and creates a
 `spec/<slug>` git branch:
 
 ```
-python -m hureva.new_spec <slug> --title "<Feature title>" --specs-dir specs
+hureva-new-spec <slug> --title "<Feature title>"
 ```
 
 Then draft the spec body with the user. Leave `status: draft` until they are ready

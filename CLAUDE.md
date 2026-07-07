@@ -1,14 +1,14 @@
 # Working with specs in this repo
 
-This repo uses the **spec review & approval workflow**. When you generate a spec,
-follow these rules so it flows through review and the gate unchanged. (This
-guidance is tool-neutral — it does not require superpowers.)
+This repo uses the **spec review & approval workflow**: specs live here alongside
+the code. When you generate a spec, follow these rules so it flows through review
+and the gate unchanged. (This guidance is tool-neutral — it does not require
+superpowers.)
 
 ## Where specs live
 
 - Specs live under `specs/<feature-slug>/spec.md`.
-- The team roster is `specs/roster.yml`; default roles are
-  `specs/defaults.yml`.
+- The team roster is `specs/roster.yml`; default roles are `specs/defaults.yml`.
 
 ## How to create a spec
 
@@ -21,12 +21,11 @@ Prefer the one-step command:
 or run it directly:
 
 ```
-python -m hureva.new_spec <slug> --title "Feature title" --specs-dir specs
+hureva-new-spec <slug> --title "Feature title"
 ```
 
-Either seeds roles from `defaults.yml`, writes `specs/<slug>/spec.md`, and
-creates a `spec/<slug>` branch. Author by hand from `specs/spec.template.md`
-if you prefer.
+Either seeds roles from `defaults.yml`, writes `specs/<slug>/spec.md`, and creates
+a `spec/<slug>` branch. Author by hand from `specs/spec.template.md` if you prefer.
 
 ## Frontmatter schema (the runtime contract, §4.2)
 

@@ -1,10 +1,17 @@
 import subprocess
+import textwrap
 
 import pytest
 
 from hureva.frontmatter import parse_spec
 from hureva.new_spec import create_spec, render_spec, main
-from hureva.scaffold import scaffold
+
+_DEFAULTS = textwrap.dedent("""
+    owner: chris
+    approvers: [elena]
+    commenters: [sam]
+    viewers: [qa-team]
+""")
 
 
 def test_render_spec_seeds_and_parses():
@@ -19,13 +26,15 @@ def test_render_spec_seeds_and_parses():
 
 
 def _init_repo(tmp_path):
-    scaffold(tmp_path, specs_dir="specs", force=True)
+    specs = tmp_path / "specs"
+    specs.mkdir()
+    (specs / "defaults.yml").write_text(_DEFAULTS, encoding="utf-8")
     for args in (
         ("init",),
         ("config", "user.email", "t@t.com"),
         ("config", "user.name", "t"),
         ("add", "-A"),
-        ("commit", "-m", "scaffold"),
+        ("commit", "-m", "init"),
     ):
         subprocess.run(["git", "-C", str(tmp_path), *args], check=True,
                        capture_output=True, text=True)
@@ -36,7 +45,7 @@ def test_create_spec_seeds_from_defaults_and_branches(tmp_path):
     path = create_spec("widget", "Widget", specs_dir="specs", repo_dir=str(tmp_path))
     assert path.exists()
     spec = parse_spec(path.read_text())
-    # seeded from the scaffolded defaults.yml
+    # seeded from defaults.yml
     assert spec.owner == "chris"
     assert spec.approvers == ["elena"]
     # branch created

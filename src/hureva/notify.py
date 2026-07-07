@@ -10,13 +10,12 @@ a future hosted service reuses it unchanged.
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from dataclasses import dataclass, field
 
 from .config import Paths, load_roster
-from .discovery import SpecChange, discover_changes
+from .discovery import SpecChange, discover_changes, load_event
 from .events import Event, Notification
 from .frontmatter import parse_spec, parse_status
 from .models import Roster
@@ -108,13 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     from .gitref import GitReader
 
     git = GitReader(args.repo_dir)
-
-    event: dict = {}
-    if args.event_file and os.path.exists(args.event_file):
-        with open(args.event_file, encoding="utf-8") as fh:
-            event = json.load(fh)
-
-    changes = discover_changes(paths, git, event)
+    changes = discover_changes(paths, git, load_event(args.event_file))
     results = process_push(changes, roster)
 
     sender = build_sender(dry_run=args.dry_run)
