@@ -45,7 +45,8 @@ a `Sender` interface, and the specs path is configurable — nothing hard-codes
 ## The workflow
 
 `.github/workflows/spec-review.yml` runs directly in the repo. On a push to a
-`spec/**` branch touching `specs/**`, it installs `hureva` and runs two jobs:
+`spec/**` branch touching `specs/**`, it installs the in-repo package
+(`pip install .` — no external repo reference) and runs two jobs:
 
 - **gate** — `hureva.gate --changed` reports whether each changed spec is cleared
   to build (advisory; add `--enforced` to block).

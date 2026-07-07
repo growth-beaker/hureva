@@ -27,18 +27,24 @@ CLAUDE.md               # tells Claude Code where specs live + the schema
   new-spec.md           # the /new-spec slash command
 ```
 
-The `spec-review.yml` workflow installs `hureva` inside the Actions runner
-(`pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"`), so
-nothing runs on your infrastructure.
+The `spec-review.yml` workflow installs the in-repo `hureva` package
+(`pip install .`) inside the Actions runner, so nothing runs on your
+infrastructure and there is no reference to any other repo.
 
 ---
 
-## Step 1 — Copy the files in
+## Step 1 — Start from this repo
 
-Grab the four items above from this repo (the `specs/`, `.github/workflows/spec-review.yml`,
-`CLAUDE.md`, and `.claude/commands/new-spec.md` here are ready to use) and drop
-them into your repo. If your repo already has a `CLAUDE.md`, paste the spec
-guidance into it rather than overwriting.
+This repo is self-contained: the `hureva` package (`src/hureva` + `pyproject.toml`),
+the workflow, and the config above are all here and ready to use. **If you're
+working in this repo, the files already exist — just fill them in (Step 2).**
+
+To run spec review in a *different* project, fork this repo, or copy the whole tool
+into it — `src/hureva/`, `pyproject.toml`, `.github/workflows/spec-review.yml`,
+`specs/`, `CLAUDE.md`, and `.claude/commands/new-spec.md`. The package must be
+present so the workflow's `pip install .` has something local to install (that's
+what keeps it free of external repo references). If the target already has a
+`CLAUDE.md`, merge the spec guidance in rather than overwriting.
 
 > **Different specs path?** If you'd rather keep specs somewhere other than
 > `specs/` (e.g. `docs/specs`), move the folder and update the two `--specs-dir`
@@ -135,10 +141,10 @@ its frontmatter.)*
 
 ## Step 6 — Create your first spec
 
-Install the CLI locally (spec authors only):
+Install the CLI locally (spec authors only) from your clone of the repo:
 
 ```bash
-pipx install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"
+pip install -e .          # from the repo root; gives you hureva-new-spec etc.
 ```
 
 Then, from `main`:
@@ -210,9 +216,9 @@ so an un-approved spec can't merge. Same file, one flag.
 
 ## Troubleshooting
 
-- **`pip install` fails in the Action** — the `growth-beaker/hureva` repo must be
-  reachable from your Actions runner. If it's private, either make it public or
-  provide a token with read access.
+- **`pip install .` fails in the Action** — make sure `pyproject.toml` and
+  `src/hureva/` are present in the repo (they ship here). The runner only needs
+  PyPI for pydantic/pyyaml; no other repo is referenced.
 - **No notification fired** — notify only fires on a *status transition* on a
   `spec/**` branch. A body-only edit, or a push to `main`, fires nothing by design.
 - **"name missing from roster"** — someone in a spec's roles isn't in `roster.yml`.

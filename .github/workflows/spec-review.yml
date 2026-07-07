@@ -1,9 +1,10 @@
-# Spec review & approval — runs directly in this repo (specs live here too).
+# Spec review & approval — self-contained: specs, this workflow, and the hureva
+# package all live in this repo.
 #
 # On a push to a spec branch, gate the changed specs and notify their reviewers.
-# Copy this file into any repo that stores its specs under `specs/`; the only
-# thing to change per repo is the specs path (two `--specs-dir` values) and, if
-# you want, flipping the gate to enforced.
+# `pip install .` installs the in-repo package (no external repo reference; only
+# pydantic/pyyaml come from PyPI). The only knobs are the specs path (two
+# `--specs-dir` values) and whether to flip the gate to enforced.
 name: spec-review
 
 on:
@@ -21,7 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"
+      - run: pip install .          # the hureva package lives in this repo
       # Advisory by default. Add --enforced to block un-approved specs (§6.3),
       # and make this job a required check with branch protection.
       - run: python -m hureva.gate --changed --specs-dir specs
@@ -35,7 +36,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"
+      - run: pip install .          # the hureva package lives in this repo
       - run: python -m hureva.notify --specs-dir specs
         env:
           # A channel is used only if its secret is set (Slack-only teams set just
