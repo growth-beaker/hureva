@@ -1,16 +1,52 @@
-# Spec review & approval — self-contained: specs, this workflow, and the hureva
-# package all live in this repo.
+# Spec review & approval — a REUSABLE workflow (the product surface).
 #
-# On a push to a spec branch, gate the changed specs and notify their reviewers.
-# `pip install .` installs the in-repo package (no external repo reference; only
-# pydantic/pyyaml come from PyPI). The only knobs are the specs path (two
-# `--specs-dir` values) and whether to flip the gate to enforced.
+# Teams don't copy this file. They *reference* it from their own repo with one
+# line and pin a version:
+#
+#   jobs:
+#     spec-review:
+#       uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1
+#       with: { specs_dir: specs }
+#       secrets: inherit
+#
+# At run time GitHub fetches this file at the tag they pinned (@v1) and runs it
+# against *their* repo — their specs, their secrets. It installs the published
+# `hureva` package from PyPI (version chosen by `hureva_version`, default the 1.x
+# line) and runs the gate + notifier. Teams upgrade by bumping @v1 -> @v2.
 name: spec-review
 
 on:
-  push:
-    branches: ["spec/**"]     # status changes happen on spec branches (§7.4)
-    paths: ["specs/**"]       # ...and only when something under specs/ changed
+  workflow_call:
+    inputs:
+      specs_dir:
+        description: "Root folder for specs in the caller's repo."
+        type: string
+        default: specs
+      enforced:
+        description: "Exit non-zero when a changed spec is not approved (blocks the build)."
+        type: boolean
+        default: false
+      require_all_approvers:
+        description: "Require every named approver to have signed off."
+        type: boolean
+        default: false
+      hureva_version:
+        description: "PyPI version spec for the hureva package (e.g. ~=1.0, ==1.2.3)."
+        type: string
+        default: "~=1.0"
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
+      SMTP_HOST:
+        required: false
+      SMTP_PORT:
+        required: false
+      SMTP_USERNAME:
+        required: false
+      SMTP_PASSWORD:
+        required: false
+      SMTP_FROM:
+        required: false
 
 jobs:
   gate:
@@ -18,14 +54,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0       # both push commits reachable for transition detection
+          fetch-depth: 0       # both push commits reachable for transition detection (§7.4)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install .          # the hureva package lives in this repo
-      # Advisory by default. Add --enforced to block un-approved specs (§6.3),
-      # and make this job a required check with branch protection.
-      - run: python -m hureva.gate --changed --specs-dir specs
+      - run: pip install "hureva${{ inputs.hureva_version }}"
+      - run: >
+          python -m hureva.gate --changed
+          --specs-dir "${{ inputs.specs_dir }}"
+          ${{ inputs.enforced && '--enforced' || '' }}
+          ${{ inputs.require_all_approvers && '--require-all-approvers' || '' }}
 
   notify:
     runs-on: ubuntu-latest
@@ -36,11 +74,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install .          # the hureva package lives in this repo
-      - run: python -m hureva.notify --specs-dir specs
+      - run: pip install "hureva${{ inputs.hureva_version }}"
+      - run: python -m hureva.notify --specs-dir "${{ inputs.specs_dir }}"
         env:
-          # A channel is used only if its secret is set (Slack-only teams set just
-          # SLACK_BOT_TOKEN). The runner provides GITHUB_EVENT_PATH automatically.
+          # A channel is used only if its secret is set. The runner provides
+          # GITHUB_EVENT_PATH automatically (the notifier reads it for before/after).
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
