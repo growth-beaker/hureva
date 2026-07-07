@@ -9,6 +9,21 @@ browser.
 
 ---
 
+## Quick start
+
+From the root of your repo:
+
+```bash
+pip install hureva
+hureva-init            # asks where specs live, then scaffolds the files
+```
+
+`hureva-init` writes the workflow and config files and prints a checklist for the
+parts that can't be scaffolded (Slack app + secret, commit, GitBook). Follow that
+checklist and you're done. The rest of this document is the same steps in detail.
+
+---
+
 ## How the install works (the 30-second version)
 
 hureva is a **PyPI package** (`hureva`). Your repo gets a small, static workflow
@@ -54,6 +69,8 @@ fixes). You install a released version and opt into upgrades.
 
 ## Step 1 — Add the workflow
 
+*(`hureva-init` already wrote this — skip to Step 2 if you ran it.)*
+
 Create `.github/workflows/spec-review.yml` in your repo with the YAML above.
 
 - **Specs elsewhere?** If you keep specs under, say, `docs/specs`, set both the
@@ -67,6 +84,8 @@ Create `.github/workflows/spec-review.yml` in your repo with the YAML above.
 ---
 
 ## Step 2 — Add your config
+
+*(`hureva-init` wrote starter versions of these — edit them with your real team.)*
 
 Two files under `specs/` (or your chosen path). Everything references people by
 **roster key** (short name), never by inline email/Slack.

@@ -45,9 +45,16 @@ a `Sender` interface, and the specs path is configurable — nothing hard-codes
 
 ## How teams install it
 
-hureva is a **PyPI package** (`hureva`), published on each GitHub Release. A team
-adds one small, static workflow that installs the versioned package and runs its
-two commands — notify, then gate:
+hureva is a **PyPI package** (`hureva`), published on each GitHub Release. The
+fastest path is to scaffold the setup, then follow the printed checklist:
+
+```bash
+pip install hureva
+hureva-init            # writes the workflow + config, prints next steps
+```
+
+Under the hood that adds one small, static workflow that installs the versioned
+package and runs its two commands — notify, then gate:
 
 ```yaml
 # team-repo/.github/workflows/spec-review.yml
@@ -86,10 +93,13 @@ and never gets fixes): you install a released version.
 
 ## CLIs
 
-Three commands (also runnable as `python -m hureva.<module>`). Each takes
+Commands (also runnable as `python -m hureva.<module>`). The operational ones take
 `--specs-dir` (default `specs`).
 
 ```bash
+# One-time: scaffold the workflow + config into this repo, print next steps
+hureva-init
+
 # Create a spec + its spec/<slug> branch (seeds roles from defaults.yml)
 hureva-new-spec <slug> --title "Feature title"
 
