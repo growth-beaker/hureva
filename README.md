@@ -46,8 +46,8 @@ a `Sender` interface, and the specs path is configurable — nothing hard-codes
 ## How teams install it
 
 hureva is a **PyPI package** (`hureva`), published on each GitHub Release. A team
-adds one small, static workflow that installs the versioned package and runs it —
-`hureva ci` does gate + notify in a single step:
+adds one small, static workflow that installs the versioned package and runs its
+two commands — notify, then gate:
 
 ```yaml
 # team-repo/.github/workflows/spec-review.yml
@@ -63,11 +63,12 @@ jobs:
         with: { fetch-depth: 0 }   # both push commits reachable (§7.4)
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install "hureva~=1.0"       # ← version pin lives here
-      - run: hureva ci --specs-dir specs     # add --enforced to block un-approved specs
+      - run: pip install "hureva~=1.0"                 # ← version pin lives here
+      - run: hureva-notify --specs-dir specs
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           # SMTP_* too, if using email
+      - run: hureva-gate --changed --specs-dir specs   # add --enforced to block
 ```
 
 Nothing of hureva's code lives in the team repo — the workflow is generic "install
@@ -85,24 +86,23 @@ and never gets fixes): you install a released version.
 
 ## CLIs
 
-`hureva <command>` (or `python -m hureva.<module>`). Every command takes
+Three commands (also runnable as `python -m hureva.<module>`). Each takes
 `--specs-dir` (default `specs`).
 
 ```bash
-# CI entrypoint: notify reviewers + gate the specs changed in a push
-hureva ci --specs-dir specs [--enforced]
-
 # Create a spec + its spec/<slug> branch (seeds roles from defaults.yml)
-hureva new-spec <slug> --title "Feature title"
+hureva-new-spec <slug> --title "Feature title"
 
-# Or run the halves separately:
-hureva notify --dry-run              # route notifications (dry-run = don't deliver)
-hureva gate --changed                # gate changed specs (advisory)
-hureva gate --changed --enforced     # ...blocking
-hureva gate <slug> --require-all-approvers   # gate one spec by slug
+# Route notifications for a push (--dry-run prints without delivering)
+hureva-notify --dry-run
+
+# Gate the specs changed in a push
+hureva-gate --changed                # advisory (exit 0)
+hureva-gate --changed --enforced     # block if not approved
+hureva-gate <slug> --require-all-approvers   # gate one spec by slug
 ```
 
-`hureva ci` / `notify` / `gate --changed` read the GitHub push event
+`hureva-notify` / `hureva-gate --changed` read the GitHub push event
 (`$GITHUB_EVENT_PATH`, set by the runner; or `--event-file`) to get the
 `before`/`after` commits. Recipients come from the spec's frontmatter roles; each
 channel resolves from `roster.yml` (Slack if present, else email). A name missing

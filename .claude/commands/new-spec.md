@@ -10,7 +10,7 @@ roles, writes `specs/<slug>/spec.md` from the template, and creates a
 `spec/<slug>` git branch:
 
 ```
-python -m hureva.new_spec <slug> --title "<Feature title>"
+hureva-new-spec <slug> --title "<Feature title>"
 ```
 
 Then draft the spec body with the user. Leave `status: draft` until they are ready

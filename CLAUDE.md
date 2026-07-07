@@ -21,7 +21,7 @@ Prefer the one-step command:
 or run it directly:
 
 ```
-python -m hureva.new_spec <slug> --title "Feature title"
+hureva-new-spec <slug> --title "Feature title"
 ```
 
 Either seeds roles from `defaults.yml`, writes `specs/<slug>/spec.md`, and creates

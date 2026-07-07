@@ -12,9 +12,9 @@ browser.
 ## How the install works (the 30-second version)
 
 hureva is a **PyPI package** (`hureva`). Your repo gets a small, static workflow
-that installs a pinned version and runs `hureva ci` (which does gate + notify in
-one step). The workflow is generic "install a tool and run it" plumbing; all the
-behavior — and all the versioning — lives in the package.
+that installs a pinned version and runs its two commands — notify, then gate. The
+workflow is generic "install a tool and run it" plumbing; all the behavior — and
+all the versioning — lives in the package.
 
 ```yaml
 # your-repo/.github/workflows/spec-review.yml
@@ -31,9 +31,10 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install "hureva~=1.0"
-      - run: hureva ci --specs-dir specs
+      - run: hureva-notify --specs-dir specs
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      - run: hureva-gate --changed --specs-dir specs
 ```
 
 ### What does `hureva~=1.0` mean?
@@ -60,7 +61,7 @@ Create `.github/workflows/spec-review.yml` in your repo with the YAML above.
   be a literal — GitHub Actions can't use a variable there.)
 - **Email too?** Add `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
   `SMTP_FROM`) to the `env:` block alongside `SLACK_BOT_TOKEN`.
-- **Enforce later:** add `--enforced` to the `hureva ci` line when you want CI to
+- **Enforce later:** add `--enforced` to the `hureva-gate` line when you want CI to
   block un-approved specs (Step 7). Start without it.
 
 ---
@@ -110,8 +111,8 @@ command and Claude guidance. They're conveniences, not required.)*
 5. In your repo: **Settings → Secrets and variables → Actions → New repository
    secret** → name `SLACK_BOT_TOKEN`, paste the token.
 
-The workflow's `env:` block passes `SLACK_BOT_TOKEN` to `hureva ci`. A channel is
-used only if its secret is set, so a Slack-only team sets just `SLACK_BOT_TOKEN`.
+The workflow's `env:` block passes `SLACK_BOT_TOKEN` to `hureva-notify`. A channel
+is used only if its secret is set, so a Slack-only team sets just `SLACK_BOT_TOKEN`.
 
 *Email (optional):* also add `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`,
 `SMTP_PASSWORD`, `SMTP_FROM`) to deliver email too.
@@ -157,7 +158,7 @@ Then, from `main`:
 
 ```bash
 git checkout main && git pull
-hureva new-spec checkout-redesign --title "Checkout Redesign"
+hureva-new-spec checkout-redesign --title "Checkout Redesign"
 ```
 
 This seeds roles from `defaults.yml`, writes `specs/checkout-redesign/spec.md`, and
@@ -175,7 +176,7 @@ git commit -m "Open checkout redesign for review"
 git push -u origin spec/checkout-redesign
 ```
 
-The push triggers your `spec-review.yml`, which runs `hureva ci`:
+The push triggers your `spec-review.yml`, which runs notify then gate:
 
 - **notify** detects `draft → in_review` and messages approvers + commenters +
   viewers with a link.
@@ -196,7 +197,7 @@ Push again — notify messages the **owner** "ready to build," the gate reports
 After committing a status change on a spec branch, preview routing with no delivery:
 
 ```bash
-hureva notify --dry-run \
+hureva-notify --dry-run \
   --event-file <(printf '{"before":"%s","after":"%s"}' "$(git rev-parse HEAD~1)" "$(git rev-parse HEAD)")
 ```
 
@@ -205,10 +206,10 @@ hureva notify --dry-run \
 ## Step 7 — (Later) turn on enforcement
 
 Everything above is **advisory**. To make CI block un-approved specs, add
-`--enforced` to the `hureva ci` line in your workflow:
+`--enforced` to the `hureva-gate` line in your workflow:
 
 ```yaml
-      - run: hureva ci --specs-dir specs --enforced
+      - run: hureva-gate --changed --specs-dir specs --enforced
 ```
 
 Then add **branch protection** on `main` and mark the spec-review check

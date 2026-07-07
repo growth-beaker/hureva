@@ -86,7 +86,7 @@ def _links_from_spec(text: str) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hureva notify", description=__doc__)
+    parser = argparse.ArgumentParser(prog="hureva-notify", description=__doc__)
     parser.add_argument("--specs-dir", default=os.environ.get("SPECS_DIR", "specs"))
     parser.add_argument("--repo-dir", default=".")
     parser.add_argument(

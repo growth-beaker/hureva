@@ -22,16 +22,17 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install "hureva~=1.0"     # ← version pin lives here
-      # `hureva ci` = notify reviewers + gate the changed specs. Advisory by
-      # default; add --enforced to block un-approved specs (§6.3) and make this a
-      # required check with branch protection.
-      - run: hureva ci --specs-dir specs
+      # Notify reviewers, then gate the changed specs. The runner provides
+      # GITHUB_EVENT_PATH automatically (used for the before/after commits).
+      - run: hureva-notify --specs-dir specs
         env:
-          # A channel is used only if its secret is set. The runner provides
-          # GITHUB_EVENT_PATH automatically (used for the before/after commits).
+          # A channel is used only if its secret is set.
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
+      # Advisory by default; add --enforced to block un-approved specs (§6.3) and
+      # make this job a required check with branch protection.
+      - run: hureva-gate --changed --specs-dir specs

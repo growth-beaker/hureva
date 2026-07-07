@@ -98,7 +98,7 @@ def _slugs_from_push(specs_dir: str, repo_dir: str, event_file: str | None) -> l
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hureva gate", description=__doc__)
+    parser = argparse.ArgumentParser(prog="hureva-gate", description=__doc__)
     parser.add_argument(
         "slug", nargs="?", help="feature slug under <specs_dir>/ (omit with --changed)"
     )
