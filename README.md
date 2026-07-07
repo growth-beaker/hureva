@@ -59,23 +59,23 @@ a body-only edit (the dedup). Recipients come from the spec's frontmatter roles;
 each channel is resolved from `roster.yml` (Slack if present, else email). A name
 missing from the roster is reported loudly, never dropped silently.
 
-## Scaffolding a team repo
+## Installing into an existing repo
 
-A team installs by materializing the template into its repo and answering one
-question — `specs_dir` (spec §13.5). That single answer is written into all three
-places that consume it: the caller workflow's `with:` inputs, the caller's literal
-`on.push.paths` filter (Actions forbids variables there), and the `CLAUDE.md` /
-`/new-spec` guidance.
+A team installs by scaffolding the config into its **existing** repo and answering
+one question — `specs_dir` (spec §13.5). That single answer is written into all
+three places that consume it: the caller workflow's `with:` inputs, the caller's
+literal `on.push.paths` filter (Actions forbids variables there), and the
+`CLAUDE.md` / `/new-spec` guidance.
 
 ```bash
-# into the current repo, default specs/ ; or pass --specs-dir docs/specs
+# run inside your existing repo; default specs/ , or pass --specs-dir docs/specs
 python -m hureva.scaffold --into . --specs-dir specs
 ```
 
-This writes `roster.yml`, `defaults.yml`, `spec.template.md`, the caller workflow,
-`CLAUDE.md`, and the `/new-spec` command. The committed `template/` directory is a
-pre-rendered snapshot of this (default `specs`) so the repo can also be used via
-GitHub's "Use this template".
+This writes `roster.yml`, `defaults.yml`, `spec.template.md`, the caller workflow
+(`.github/workflows/spec-review.yml`, referencing the published `@v1` reusable
+workflows), `CLAUDE.md`, and the `/new-spec` command. It refuses to overwrite
+existing files without `--force`, so it never clobbers real config.
 
 Creating a spec (what `/new-spec` runs):
 

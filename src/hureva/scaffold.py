@@ -1,7 +1,7 @@
-"""Scaffolder + template contents (spec §13.2, §13.5, §13.8, §14.2).
+"""Scaffolder — installs the spec-review config into an existing repo (§13.2, §13.5, §13.8, §14.2).
 
-A team installs by materializing these files into its repo and answering one
-question: ``specs_dir``. That single answer is written into all three places
+A team installs by scaffolding these files into its existing repo and answering
+one question: ``specs_dir``. That single answer is written into all three places
 that consume it (spec §13.5):
 
 1. the caller workflow's ``with: specs_dir:`` inputs,
@@ -9,10 +9,8 @@ that consume it (spec §13.5):
    variables there, so the *literal* path is written in at scaffold time, and
 3. ``CLAUDE.md`` / ``/new-spec`` guidance so generated specs land in the right place.
 
-This module is the single source of truth for the template. ``render_files``
-returns the whole tree as (relative_path, content) pairs; ``scaffold`` writes
-them. The committed ``template/`` snapshot is just ``render_files`` run with the
-default ``specs`` path.
+``render_files`` returns the whole tree as (relative_path, content) pairs;
+``scaffold`` writes them into the target repo without overwriting existing files.
 """
 
 from __future__ import annotations

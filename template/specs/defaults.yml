@@ -1,7 +1,0 @@
-# Default review assignment (spec §4.4), copied into a NEW spec's frontmatter at
-# creation, then freely overridden per spec. A seed, not a runtime fallback:
-# after creation the spec's own frontmatter is the only thing consulted.
-owner: chris
-approvers: [elena]
-commenters: [sam]
-viewers: [qa-team]
