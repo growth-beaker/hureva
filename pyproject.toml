@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hureva"
+version = "0.1.0"
+description = "Portable core for the spec review & approval workflow (frontmatter contract, transition detection, role→person→channel routing, status gate)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "pydantic>=2",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+slack = ["slack_sdk>=3"]
+dev = ["pytest>=8", "slack_sdk>=3"]
+
+[project.scripts]
+hureva-notify = "hureva.notify:main"
+hureva-gate = "hureva.gate:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
