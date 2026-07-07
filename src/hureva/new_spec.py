@@ -87,7 +87,7 @@ def _git(repo_dir: str, *args: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hureva-new-spec", description=__doc__)
+    parser = argparse.ArgumentParser(prog="hureva new-spec", description=__doc__)
     parser.add_argument("slug", help="feature slug (folder name under <specs_dir>/)")
     parser.add_argument("--title", required=True)
     parser.add_argument("--specs-dir", default="specs")

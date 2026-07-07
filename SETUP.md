@@ -1,9 +1,8 @@
 # Installing hureva in your team's repo
 
-Your specs live in your own repo under `specs/`. You install hureva by
-**referencing** it — you don't copy its code. Concretely you add: one small caller
-workflow, a bit of config, and a Slack secret. hureva itself (its reusable workflow
-and its Python package) stays in the hureva project and is pulled in at run time.
+Your specs live in your own repo under `specs/`. You install hureva as a
+**versioned package**: add one small workflow that `pip install`s it and runs it,
+a bit of config, and a Slack secret. None of hureva's code lives in your repo.
 
 Reviewers (PM/UX/QA) install **nothing** — they review in GitBook/ReadMe in a
 browser.
@@ -12,12 +11,10 @@ browser.
 
 ## How the install works (the 30-second version)
 
-hureva ships as two referenced pieces:
-
-- a **reusable GitHub Actions workflow** — you point at it with one `uses:` line;
-- a **PyPI package** (`hureva`) — the reusable workflow `pip install`s it to do the work.
-
-Your repo gets a caller workflow like this:
+hureva is a **PyPI package** (`hureva`). Your repo gets a small, static workflow
+that installs a pinned version and runs `hureva ci` (which does gate + notify in
+one step). The workflow is generic "install a tool and run it" plumbing; all the
+behavior — and all the versioning — lives in the package.
 
 ```yaml
 # your-repo/.github/workflows/spec-review.yml
@@ -27,37 +24,44 @@ on:
     paths: ["specs/**"]
 jobs:
   spec-review:
-    uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1
-    with: { specs_dir: specs }
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "hureva~=1.0"
+      - run: hureva ci --specs-dir specs
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 ```
 
-### What does `@v1` mean?
+### What does `hureva~=1.0` mean?
 
-`uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1` says: **"run
-hureva's `spec-review.yml`, at the version tagged `v1`."** It's a *version pin*,
-just like `"hureva": "^1.0"` in a dependency list.
+`pip install "hureva~=1.0"` is a *version pin*, just like `"hureva": "^1.0"` in a
+dependency list. It says "any 1.x release."
 
-- At push time GitHub fetches that workflow **at `v1`** and runs it against your
-  repo (your specs, your secrets). Nothing of hureva's is stored in your repo.
-- Pinning `@v1` means your setup behaves the same forever; when hureva ships `v2`
-  it does **nothing** to you until you change that one line to `@v2`. You upgrade
-  on your schedule.
+- Your setup behaves consistently; compatible fixes (1.x) flow in automatically.
+- A new **major** version (`2.0`) does **nothing** to you until you change that one
+  line to `~=2.0` — you upgrade on your schedule. Pin exactly with `==1.2.3` if you
+  want zero drift.
 
 This is the opposite of copying hureva's code in (which would drift and never get
-fixes). You reference a released version and opt into upgrades.
+fixes). You install a released version and opt into upgrades.
 
 ---
 
-## Step 1 — Add the caller workflow
+## Step 1 — Add the workflow
 
 Create `.github/workflows/spec-review.yml` in your repo with the YAML above.
 
 - **Specs elsewhere?** If you keep specs under, say, `docs/specs`, set both the
-  `paths:` filter and `with: { specs_dir: docs/specs }` to match. (The `paths:`
-  value must be a literal — GitHub Actions can't use a variable there.)
-- **Enforce later:** add `enforced: true` under `with:` when you want CI to block
-  un-approved specs (Step 7). Start without it.
+  `paths:` filter and `--specs-dir docs/specs` to match. (The `paths:` value must
+  be a literal — GitHub Actions can't use a variable there.)
+- **Email too?** Add `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
+  `SMTP_FROM`) to the `env:` block alongside `SLACK_BOT_TOKEN`.
+- **Enforce later:** add `--enforced` to the `hureva ci` line when you want CI to
+  block un-approved specs (Step 7). Start without it.
 
 ---
 
@@ -106,7 +110,7 @@ command and Claude guidance. They're conveniences, not required.)*
 5. In your repo: **Settings → Secrets and variables → Actions → New repository
    secret** → name `SLACK_BOT_TOKEN`, paste the token.
 
-`secrets: inherit` in the caller forwards it to hureva's workflow. A channel is
+The workflow's `env:` block passes `SLACK_BOT_TOKEN` to `hureva ci`. A channel is
 used only if its secret is set, so a Slack-only team sets just `SLACK_BOT_TOKEN`.
 
 *Email (optional):* also add `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`,
@@ -123,7 +127,7 @@ pushed branch).
 ```bash
 git checkout -b add-spec-review
 git add .github/workflows/spec-review.yml specs/
-git commit -m "Add spec review & approval (references hureva@v1)"
+git commit -m "Add spec review & approval (hureva)"
 git push -u origin add-spec-review   # open a PR and merge into main
 ```
 
@@ -153,7 +157,7 @@ Then, from `main`:
 
 ```bash
 git checkout main && git pull
-hureva-new-spec checkout-redesign --title "Checkout Redesign"
+hureva new-spec checkout-redesign --title "Checkout Redesign"
 ```
 
 This seeds roles from `defaults.yml`, writes `specs/checkout-redesign/spec.md`, and
@@ -171,7 +175,7 @@ git commit -m "Open checkout redesign for review"
 git push -u origin spec/checkout-redesign
 ```
 
-The push triggers your caller → hureva's reusable workflow:
+The push triggers your `spec-review.yml`, which runs `hureva ci`:
 
 - **notify** detects `draft → in_review` and messages approvers + commenters +
   viewers with a link.
@@ -192,7 +196,7 @@ Push again — notify messages the **owner** "ready to build," the gate reports
 After committing a status change on a spec branch, preview routing with no delivery:
 
 ```bash
-python -m hureva.notify --dry-run \
+hureva notify --dry-run \
   --event-file <(printf '{"before":"%s","after":"%s"}' "$(git rev-parse HEAD~1)" "$(git rev-parse HEAD)")
 ```
 
@@ -201,41 +205,31 @@ python -m hureva.notify --dry-run \
 ## Step 7 — (Later) turn on enforcement
 
 Everything above is **advisory**. To make CI block un-approved specs, add
-`enforced: true` to your caller:
+`--enforced` to the `hureva ci` line in your workflow:
 
 ```yaml
-  spec-review:
-    uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1
-    with:
-      specs_dir: specs
-      enforced: true
-    secrets: inherit
+      - run: hureva ci --specs-dir specs --enforced
 ```
 
-Then add **branch protection** on `main` and mark the gate check **required**, so
-an un-approved spec can't merge. Same one line of config.
+Then add **branch protection** on `main` and mark the spec-review check
+**required**, so an un-approved spec can't merge. Same one line of config.
 
 ---
 
 ## Upgrading hureva
 
-When hureva releases a new major version, bump the pin in your caller
-(`@v1` → `@v2`) when you're ready; read its release notes first. Patch and minor
-fixes inside the 1.x line flow in automatically because the reusable workflow
-installs `hureva~=1.0`. To freeze the library exactly, pass
-`with: { hureva_version: "==1.2.3" }`.
+Patch and minor fixes inside the 1.x line flow in automatically because the
+workflow installs `hureva~=1.0`. When hureva releases a new **major** version, bump
+that pin (`~=1.0` → `~=2.0`) when you're ready, after reading its release notes. To
+freeze the library exactly, use `pip install "hureva==1.2.3"`.
 
 ---
 
 ## Troubleshooting
 
-- **`uses: … @v1` can't be found** — the `growth-beaker/hureva` repo must be
-  visible to your Actions. Public repos work out of the box; for a private hureva,
-  enable org access to its workflows.
-- **`pip install hureva` fails in the run** — hureva must be published to PyPI for
-  the version your `@v1` resolves to. Until the first release, install from git by
-  setting `hureva_version` to ` @ git+https://github.com/growth-beaker/hureva.git@v1`
-  (note the leading space — it becomes `pip install "hureva @ git+…"`).
+- **`pip install "hureva~=1.0"` fails in the run** — hureva must be published to
+  PyPI. Until the first release, install from git instead:
+  `pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"`.
 - **No notification fired** — notify only fires on a *status transition* on a
   `spec/**` branch. A body-only edit, or a push to `main`, fires nothing by design.
 - **"name missing from roster"** — someone in a spec's roles isn't in `roster.yml`.

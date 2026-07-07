@@ -8,10 +8,23 @@ the two CLIs stay in lockstep and the git shell is injected (testable).
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 
 from .config import Paths
+
+
+def load_event(event_file: str | None) -> dict:
+    """Load a GitHub push event payload from a file, or {} if absent.
+
+    Shared by the notify, gate, and ci entrypoints so they read the push's
+    before/after SHAs the same way.
+    """
+    if event_file and os.path.exists(event_file):
+        with open(event_file, encoding="utf-8") as fh:
+            return json.load(fh)
+    return {}
 
 
 @dataclass(frozen=True)

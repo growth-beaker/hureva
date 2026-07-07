@@ -70,7 +70,7 @@ def _git(repo, *args):
                    capture_output=True, text=True)
 
 
-def test_gate_cli_changed_mode_gates_pushed_spec(tmp_path, make_spec):
+def test_gate_cli_changed_mode_gates_pushed_spec(tmp_path, monkeypatch, make_spec, capsys):
     repo = tmp_path
     _git(repo, "init")
     _git(repo, "config", "user.email", "t@t.com")
@@ -93,16 +93,19 @@ def test_gate_cli_changed_mode_gates_pushed_spec(tmp_path, make_spec):
     event = repo / "event.json"
     event.write_text(json.dumps({"before": before, "after": after}), encoding="utf-8")
 
+    # Run from the repo root with relative paths, as the workflow does, so the
+    # git-relative changed paths match --specs-dir.
+    monkeypatch.chdir(repo)
     rc = main([
         "--changed", "--enforced",
-        "--specs-dir", str(repo / "specs"),
-        "--repo-dir", str(repo),
+        "--specs-dir", "specs", "--repo-dir", ".",
         "--event-file", str(event),
     ])
     assert rc == 0  # the changed spec is approved
+    assert "cleared to build" in capsys.readouterr().out  # it actually gated it
 
 
-def test_gate_cli_changed_mode_no_specs_exit_zero(tmp_path, capsys):
+def test_gate_cli_changed_mode_no_specs_exit_zero(tmp_path, monkeypatch, capsys):
     repo = tmp_path
     _git(repo, "init")
     _git(repo, "config", "user.email", "t@t.com")
@@ -114,9 +117,10 @@ def test_gate_cli_changed_mode_no_specs_exit_zero(tmp_path, capsys):
                           capture_output=True, text=True, check=True).stdout.strip()
     event = repo / "event.json"
     event.write_text(json.dumps({"before": head, "after": head}), encoding="utf-8")
+    monkeypatch.chdir(repo)
     rc = main([
-        "--changed", "--specs-dir", str(repo / "specs"),
-        "--repo-dir", str(repo), "--event-file", str(event),
+        "--changed", "--specs-dir", "specs", "--repo-dir", ".",
+        "--event-file", str(event),
     ])
     assert rc == 0
     assert "nothing to gate" in capsys.readouterr().out

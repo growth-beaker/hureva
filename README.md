@@ -5,10 +5,10 @@ specs with Claude, get structured review from non-technical teammates (PM, UX, Q
 **before code is written**, and record approval in git so it can gate the build.
 Based on [`docs/spec-review-workflow-specification.md`](docs/spec-review-workflow-specification.md).
 
-hureva is a **product teams reference, not copy**. Your specs live in your own
-repo under `specs/`; you add an ~8-line workflow that references hureva's reusable
-workflow at a pinned version, plus a bit of config. Nothing is hosted, and none of
-hureva's code lives in your repo.
+hureva is a **versioned package teams install, not copy**. Your specs live in your
+own repo under `specs/`; you add a small workflow that `pip install`s a pinned
+version of `hureva` and runs it, plus a bit of config. Nothing is hosted, and none
+of hureva's code lives in your repo.
 
 > **Installing it? See [`SETUP.md`](SETUP.md)** for the step-by-step guide.
 
@@ -43,16 +43,11 @@ The logic is a pure library (git/env reading is a thin shell), delivery is behin
 a `Sender` interface, and the specs path is configurable — nothing hard-codes
 `specs`.
 
-## How teams install it (reference, don't copy)
+## How teams install it
 
-hureva ships two ways, and teams use both together:
-
-1. A **PyPI package** (`hureva`) — the logic. Published on each GitHub Release.
-2. A **reusable workflow** (`.github/workflows/spec-review.yml`, `on: workflow_call`)
-   — the ready-made GitHub Actions job. Teams reference it by tag; they never copy
-   its contents.
-
-A team adds one small caller workflow to their repo:
+hureva is a **PyPI package** (`hureva`), published on each GitHub Release. A team
+adds one small, static workflow that installs the versioned package and runs it —
+`hureva ci` does gate + notify in a single step:
 
 ```yaml
 # team-repo/.github/workflows/spec-review.yml
@@ -62,49 +57,52 @@ on:
     paths: ["specs/**"]       # (literal — Actions can't use a variable here)
 jobs:
   spec-review:
-    uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1
-    with: { specs_dir: specs }        # add `enforced: true` to block un-approved specs
-    secrets: inherit                  # forwards SLACK_BOT_TOKEN etc.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # both push commits reachable (§7.4)
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install "hureva~=1.0"       # ← version pin lives here
+      - run: hureva ci --specs-dir specs     # add --enforced to block un-approved specs
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          # SMTP_* too, if using email
 ```
 
-`uses: growth-beaker/hureva/.github/workflows/spec-review.yml@v1` means "run
-hureva's `spec-review.yml`, at the version tagged `v1`." At push time GitHub
-fetches that workflow at `v1` and runs it against *this* repo — its specs, its
-secrets — installing the `hureva` package from PyPI and running the gate + notifier.
+Nothing of hureva's code lives in the team repo — the workflow is generic "install
+a tool and run it" plumbing, and all behavior is in the versioned package.
 
-### Versioning — what `@v1` does
+### Versioning — pin the package
 
-`@v1` is a **version pin**, exactly like `"hureva": "^1.0"` in a dependency list.
-It's the alternative to copying: instead of pasting hureva's code into your repo
-(which drifts and never gets fixes), you point at a released version.
+`pip install "hureva~=1.0"` is the version pin (like `"hureva": "^1.0"` in a
+dependency list). It's the alternative to copying hureva's code in (which drifts
+and never gets fixes): you install a released version.
 
-- Pin `@v1` and behavior stays stable; hureva shipping `v2` does nothing to you.
-- Upgrade when *you* choose, by editing that one line to `@v2`.
-
-The reusable workflow installs the library as `hureva~=1.0` by default (any 1.x
-release), so `@v1` picks up compatible fixes automatically; override with
-`with: { hureva_version: "==1.2.3" }` to pin exactly.
+- `~=1.0` takes any 1.x release, so compatible fixes flow in automatically.
+- Pin exactly with `==1.2.3`; move to the next major (`~=2.0`) when *you* choose,
+  after reading its release notes.
 
 ## CLIs
 
-Every command takes `--specs-dir` (default `specs`).
+`hureva <command>` (or `python -m hureva.<module>`). Every command takes
+`--specs-dir` (default `specs`).
 
 ```bash
+# CI entrypoint: notify reviewers + gate the specs changed in a push
+hureva ci --specs-dir specs [--enforced]
+
 # Create a spec + its spec/<slug> branch (seeds roles from defaults.yml)
-python -m hureva.new_spec <slug> --title "Feature title"
+hureva new-spec <slug> --title "Feature title"
 
-# Detect the transition in a push and route notifications
-# (--dry-run prints who would be notified without delivering)
-python -m hureva.notify --dry-run
-
-# Gate the specs changed in a push
-python -m hureva.gate --changed              # advisory (exit 0)
-python -m hureva.gate --changed --enforced   # block if not approved
-# or gate one spec by slug:
-python -m hureva.gate <slug> --enforced --require-all-approvers
+# Or run the halves separately:
+hureva notify --dry-run              # route notifications (dry-run = don't deliver)
+hureva gate --changed                # gate changed specs (advisory)
+hureva gate --changed --enforced     # ...blocking
+hureva gate <slug> --require-all-approvers   # gate one spec by slug
 ```
 
-`hureva.notify` / `hureva.gate --changed` read the GitHub push event
+`hureva ci` / `notify` / `gate --changed` read the GitHub push event
 (`$GITHUB_EVENT_PATH`, set by the runner; or `--event-file`) to get the
 `before`/`after` commits. Recipients come from the spec's frontmatter roles; each
 channel resolves from `roster.yml` (Slack if present, else email). A name missing

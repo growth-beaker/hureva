@@ -87,22 +87,18 @@ def _report_result(result: GateResult, enforced: bool) -> int:
 
 def _slugs_from_push(specs_dir: str, repo_dir: str, event_file: str | None) -> list[str]:
     """Discover the slugs of specs changed in a push (for ``--changed`` mode)."""
-    import json
-
-    from .discovery import discover_changes
+    from .discovery import discover_changes, load_event
     from .gitref import GitReader
 
-    event: dict = {}
-    if event_file and os.path.exists(event_file):
-        with open(event_file, encoding="utf-8") as fh:
-            event = json.load(fh)
-    changes = discover_changes(Paths(specs_dir), GitReader(repo_dir), event)
+    changes = discover_changes(
+        Paths(specs_dir), GitReader(repo_dir), load_event(event_file)
+    )
     # Preserve order, dedupe (a slug appears once even if listed twice).
     return list(dict.fromkeys(c.slug for c in changes))
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="hureva-gate", description=__doc__)
+    parser = argparse.ArgumentParser(prog="hureva gate", description=__doc__)
     parser.add_argument(
         "slug", nargs="?", help="feature slug under <specs_dir>/ (omit with --changed)"
     )

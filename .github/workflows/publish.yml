@@ -1,8 +1,8 @@
 # Publish hureva to PyPI when a GitHub Release is published.
 #
 # This is how the product ships: cut a release (e.g. v1.0.0) and this builds the
-# package and uploads it to PyPI, so teams' reusable-workflow runs can
-# `pip install hureva`. Uses PyPI Trusted Publishing (OIDC) — no token to manage;
+# package and uploads it to PyPI, so teams' CI runs can `pip install hureva`.
+# Uses PyPI Trusted Publishing (OIDC) — no token to manage;
 # configure a "trusted publisher" for this repo + workflow on PyPI once
 # (https://docs.pypi.org/trusted-publishers/). To use an API token instead, add
 # `with: password: ${{ secrets.PYPI_API_TOKEN }}` to the publish step.
