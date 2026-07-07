@@ -59,6 +59,35 @@ a body-only edit (the dedup). Recipients come from the spec's frontmatter roles;
 each channel is resolved from `roster.yml` (Slack if present, else email). A name
 missing from the roster is reported loudly, never dropped silently.
 
+## Scaffolding a team repo
+
+A team installs by materializing the template into its repo and answering one
+question — `specs_dir` (spec §13.5). That single answer is written into all three
+places that consume it: the caller workflow's `with:` inputs, the caller's literal
+`on.push.paths` filter (Actions forbids variables there), and the `CLAUDE.md` /
+`/new-spec` guidance.
+
+```bash
+# into the current repo, default specs/ ; or pass --specs-dir docs/specs
+python -m hureva.scaffold --into . --specs-dir specs
+```
+
+This writes `roster.yml`, `defaults.yml`, `spec.template.md`, the caller workflow,
+`CLAUDE.md`, and the `/new-spec` command. The committed `template/` directory is a
+pre-rendered snapshot of this (default `specs`) so the repo can also be used via
+GitHub's "Use this template".
+
+Creating a spec (what `/new-spec` runs):
+
+```bash
+python -m hureva.new_spec <slug> --title "Feature title" --specs-dir specs
+```
+
+It reads `defaults.yml`, seeds the frontmatter roles (overrides win, unset roles
+inherit — §4.4), writes `<specs_dir>/<slug>/spec.md`, and creates the `spec/<slug>`
+branch. Bare Claude Code, `/new-spec`, and hand authoring all reach the same
+conformant spec.
+
 ## Reusable workflows
 
 `.github/workflows/notify.yml` and `.github/workflows/status-gate.yml` are
