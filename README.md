@@ -59,6 +59,36 @@ a body-only edit (the dedup). Recipients come from the spec's frontmatter roles;
 each channel is resolved from `roster.yml` (Slack if present, else email). A name
 missing from the roster is reported loudly, never dropped silently.
 
+## Reusable workflows
+
+`.github/workflows/notify.yml` and `.github/workflows/status-gate.yml` are
+`workflow_call` reusable workflows (spec §13.7). A tenant repo references them by
+tag and passes its `specs_dir`; each one checks out the caller's repo, installs
+this library at a pinned ref, and runs the matching CLI. They are thin wrappers —
+no logic lives in the YAML.
+
+A tenant caller (`.github/workflows/spec-review.yml`), with the literal specs
+path written in at scaffold time:
+
+```yaml
+on:
+  push:
+    branches: ["spec/**"]      # status changes happen on spec branches (§7.4)
+    paths: ["specs/**"]        # literal path, written by the scaffolder
+jobs:
+  notify:
+    uses: growth-beaker/hureva/.github/workflows/notify.yml@v1
+    with: { specs_dir: specs }
+    secrets: inherit
+  gate:
+    uses: growth-beaker/hureva/.github/workflows/status-gate.yml@v1
+    with: { specs_dir: specs }   # add `enforced: true` to block un-approved specs
+    secrets: inherit
+```
+
+The `notify` job needs `fetch-depth: 0` for two-commit transition detection — the
+reusable workflow sets that itself, so the caller doesn't have to.
+
 ## Channels
 
 Delivery is enabled by the environment (spec §13.6):

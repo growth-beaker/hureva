@@ -1,3 +1,6 @@
+import json
+import subprocess
+
 import pytest
 
 from hureva.events import Event
@@ -60,3 +63,60 @@ def test_gate_cli_approved_exit_zero(tmp_path, make_spec):
     _write_spec(tmp_path, make_spec(status="approved", approvers=["elena"], approved_by=["elena"]))
     rc = main(["widget", "--specs-dir", str(tmp_path / "specs"), "--enforced"])
     assert rc == 0
+
+
+def _git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True,
+                   capture_output=True, text=True)
+
+
+def test_gate_cli_changed_mode_gates_pushed_spec(tmp_path, make_spec):
+    repo = tmp_path
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "t@t.com")
+    _git(repo, "config", "user.name", "t")
+    _write_spec(repo, make_spec(status="draft"))
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "draft")
+    before = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                            capture_output=True, text=True, check=True).stdout.strip()
+
+    (repo / "specs" / "widget" / "spec.md").write_text(
+        make_spec(status="approved", approvers=["elena"], approved_by=["elena"]),
+        encoding="utf-8",
+    )
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "approve")
+    after = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, check=True).stdout.strip()
+
+    event = repo / "event.json"
+    event.write_text(json.dumps({"before": before, "after": after}), encoding="utf-8")
+
+    rc = main([
+        "--changed", "--enforced",
+        "--specs-dir", str(repo / "specs"),
+        "--repo-dir", str(repo),
+        "--event-file", str(event),
+    ])
+    assert rc == 0  # the changed spec is approved
+
+
+def test_gate_cli_changed_mode_no_specs_exit_zero(tmp_path, capsys):
+    repo = tmp_path
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "t@t.com")
+    _git(repo, "config", "user.name", "t")
+    (repo / "README.md").write_text("hi\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-m", "init")
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    event = repo / "event.json"
+    event.write_text(json.dumps({"before": head, "after": head}), encoding="utf-8")
+    rc = main([
+        "--changed", "--specs-dir", str(repo / "specs"),
+        "--repo-dir", str(repo), "--event-file", str(event),
+    ])
+    assert rc == 0
+    assert "nothing to gate" in capsys.readouterr().out

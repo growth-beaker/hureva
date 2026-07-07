@@ -16,21 +16,12 @@ import sys
 from dataclasses import dataclass, field
 
 from .config import Paths, load_roster
+from .discovery import SpecChange, discover_changes
 from .events import Event, Notification
 from .frontmatter import parse_spec, parse_status
 from .models import Roster
 from .routing import build_notifications
 from .senders import Sender, build_sender
-
-
-@dataclass(frozen=True)
-class SpecChange:
-    """One changed ``spec.md`` with its before/after text (§7.4)."""
-
-    slug: str
-    path: str
-    before_text: str | None
-    after_text: str | None
 
 
 @dataclass
@@ -95,34 +86,6 @@ def _links_from_spec(text: str) -> dict[str, str]:
 # --------------------------------------------------------------------------- CLI
 
 
-def _changes_from_github_event(paths: Paths, git, event: dict) -> list[SpecChange]:
-    """Build SpecChanges from a GitHub push event payload + a GitReader."""
-    before = event.get("before", "")
-    after = event.get("after", "HEAD")
-    spec_suffix = "spec.md"
-
-    changed = git.changed_files(before, after) if before else git.changed_files(
-        f"{after}~1", after
-    )
-    changes: list[SpecChange] = []
-    for path in changed:
-        # Only specs under the configured specs_dir, and only spec.md files.
-        p = str(paths.specs_dir)
-        if not (path.startswith(p + "/") or path.startswith(p + os.sep)):
-            continue
-        if not path.endswith(spec_suffix):
-            continue
-        changes.append(
-            SpecChange(
-                slug=paths.slug_for(path),
-                path=path,
-                before_text=git.read_file_at(before, path) if before else None,
-                after_text=git.read_file_at(after, path),
-            )
-        )
-    return changes
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="hureva-notify", description=__doc__)
     parser.add_argument("--specs-dir", default=os.environ.get("SPECS_DIR", "specs"))
@@ -151,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.event_file, encoding="utf-8") as fh:
             event = json.load(fh)
 
-    changes = _changes_from_github_event(paths, git, event)
+    changes = discover_changes(paths, git, event)
     results = process_push(changes, roster)
 
     sender = build_sender(dry_run=args.dry_run)

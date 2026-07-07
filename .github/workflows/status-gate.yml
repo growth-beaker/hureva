@@ -1,0 +1,54 @@
+# Reusable "status-gate" workflow (spec §6, §13.7).
+#
+# Reads the frontmatter `status` of every spec changed in the push and reports
+# whether it is cleared to build. Advisory by default (always exits 0, the record
+# still lives in git); set `enforced: true` and wire this as a required status
+# check with branch protection to block un-approved specs from merging (spec §6.3,
+# §6.1). Optional `require_all_approvers` additionally demands approved_by ⊇
+# approvers before honoring `approved` (spec §6.2).
+name: status-gate
+
+on:
+  workflow_call:
+    inputs:
+      specs_dir:
+        description: "Root folder for specs (matches the caller's layout)."
+        type: string
+        default: specs
+      lib_ref:
+        description: "Git ref of the hureva library to install (pin with the caller)."
+        type: string
+        default: v1
+      enforced:
+        description: "Exit non-zero when a changed spec is not approved."
+        type: boolean
+        default: false
+      require_all_approvers:
+        description: "Require every named approver to have signed off."
+        type: boolean
+        default: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so the push's changed specs are discoverable across commits.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install hureva core library
+        run: pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@${{ inputs.lib_ref }}"
+
+      - name: Gate
+        run: >
+          python -m hureva.gate --changed
+          --specs-dir "${{ inputs.specs_dir }}"
+          ${{ inputs.enforced && '--enforced' || '' }}
+          ${{ inputs.require_all_approvers && '--require-all-approvers' || '' }}
+        env:
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
