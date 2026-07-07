@@ -72,7 +72,7 @@ def build_sender(dry_run: bool = False, env: dict[str, str] | None = None) -> Mu
 
     if dry_run:
         dry = DryRunSender()
-        return MultiSender({"slack": dry, "email": dry}, fallback=dry)
+        return MultiSender({"slack": dry, "email": dry, "github": dry}, fallback=dry)
 
     senders: dict[str, Sender] = {}
 
@@ -86,6 +86,18 @@ def build_sender(dry_run: bool = False, env: dict[str, str] | None = None) -> Mu
         from .email import SmtpSender
 
         senders["email"] = SmtpSender.from_env(env)
+
+    # GitHub needs no configured secret — the workflow's built-in GITHUB_TOKEN is
+    # enough — so this channel is available by default inside Actions.
+    if env.get("GITHUB_TOKEN") and env.get("GITHUB_REPOSITORY"):
+        from .github import GitHubSender
+
+        senders["github"] = GitHubSender(
+            token=env["GITHUB_TOKEN"],
+            repository=env["GITHUB_REPOSITORY"],
+            base_branch=env.get("HUREVA_BASE_BRANCH", "main"),
+            api_url=env.get("GITHUB_API_URL", "https://api.github.com"),
+        )
 
     return MultiSender(senders)
 

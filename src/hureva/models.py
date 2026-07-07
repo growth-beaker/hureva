@@ -39,11 +39,12 @@ class Person(BaseModel):
 
     email: str | None = None
     slack: str | None = None
+    github: str | None = None   # GitHub username — notified via a PR, no secrets
 
     @model_validator(mode="after")
     def _at_least_one_channel(self) -> Person:
-        if not self.email and not self.slack:
-            raise ValueError("person must have at least one of: email, slack")
+        if not (self.email or self.slack or self.github):
+            raise ValueError("person must have at least one of: email, slack, github")
         return self
 
 

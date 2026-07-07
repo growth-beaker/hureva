@@ -25,6 +25,12 @@ on:
     branches: ["spec/**"]     # status changes happen on spec branches
     paths: ["{specs_dir}/**"]
 
+# Lets the GitHub notify channel open a PR and request reviewers with the
+# built-in GITHUB_TOKEN — no extra secret needed.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   spec-review:
     runs-on: ubuntu-latest
@@ -38,7 +44,9 @@ jobs:
       - run: pip install "hureva~=1.0"     # version pin
       - run: hureva-notify --specs-dir {specs_dir}
         env:
-          # A channel is used only if its secret is set.
+          # GitHub channel: works out of the box, no secret to set.
+          GITHUB_TOKEN: ${{{{ secrets.GITHUB_TOKEN }}}}
+          # Slack / email are used only if their secret is set.
           SLACK_BOT_TOKEN: ${{{{ secrets.SLACK_BOT_TOKEN }}}}
           SMTP_HOST: ${{{{ secrets.SMTP_HOST }}}}
           SMTP_PORT: ${{{{ secrets.SMTP_PORT }}}}
@@ -55,13 +63,18 @@ def _roster() -> str:
     return """\
 # Central team roster: the only place channels are defined. People are referenced
 # everywhere by their key here (name-only); a name missing from this file fails
-# loudly rather than silently. Slack is used if present, else email. For reliable
-# DMs use a Slack member ID (U…); use #channel for groups.
+# loudly rather than silently.
+#
+# Channel per person (list only the one you want; order breaks ties):
+#   github: <username>   — notified via a PR review request. No secrets to set up;
+#                          the person just needs access to the repo. Easiest.
+#   slack:  "<U-id>"     — needs the SLACK_BOT_TOKEN secret (member ID or #channel).
+#   email:  <addr>       — needs the SMTP_* secrets.
 people:
-  chris:   { email: chris@acme.com, slack: "U01ABC123" }
-  elena:   { email: elena@acme.com, slack: "U02DEF456" }
-  sam:     { email: sam@acme.com }        # email only is fine
-  qa-team: { slack: "#qa" }               # a channel is fine; email optional
+  chris:   { github: chris }
+  elena:   { github: elena-pm }
+  sam:     { github: sam-ux }
+  qa-team: { github: qa-lead }
 """
 
 

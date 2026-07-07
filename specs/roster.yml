@@ -1,9 +1,13 @@
-# Central team roster (spec §4.3): the only place channels are defined.
-# People are referenced everywhere by their key here (name-only); a name missing
-# from this file fails loudly rather than silently. Slack is used if present,
-# else email. For reliable DMs use a Slack member ID (U…); use #channel for groups.
+# Central team roster (spec §4.3): the only place channels are defined. People are
+# referenced everywhere by their key here (name-only); a name missing from this
+# file fails loudly rather than silently.
+#
+# Channel per person (list only the one you want; order breaks ties):
+#   github: <username>   — notified via a PR review request. No secrets to set up.
+#   slack:  "<U-id>"     — needs SLACK_BOT_TOKEN (member ID, or #channel for groups).
+#   email:  <addr>       — needs the SMTP_* secrets.
 people:
-  chris:   { email: chris@acme.com, slack: "U01ABC123" }
-  elena:   { email: elena@acme.com, slack: "U02DEF456" }
-  sam:     { email: sam@acme.com }        # email only is fine
-  qa-team: { slack: "#qa" }               # a channel is fine; email optional
+  chris:   { github: chris }
+  elena:   { github: elena-pm }
+  sam:     { github: sam-ux }
+  qa-team: { github: qa-lead }

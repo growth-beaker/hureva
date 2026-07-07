@@ -1,14 +1,17 @@
+import urllib.error
+
 import pytest
 
 from hureva.events import Event, Notification
 from hureva.senders import DryRunSender, MultiSender, build_sender
 from hureva.senders.email import SmtpSender
+from hureva.senders.github import GitHubSender
 from hureva.senders.slack import SlackSender
 
 
-def _note(channel="slack", handle="@x"):
+def _note(channel="slack", handle="@x", event=Event.ready_for_review, slug="widget"):
     return Notification(
-        event=Event.ready_for_review, slug="widget", recipient="x",
+        event=event, slug=slug, recipient="x",
         channel=channel, handle=handle, subject="s", body="b",
     )
 
@@ -43,6 +46,66 @@ def test_build_sender_email_from_env():
     ms = build_sender(env={"SMTP_HOST": "smtp.acme.com", "SMTP_PORT": "2525"})
     assert isinstance(ms._senders["email"], SmtpSender)
     assert ms._senders["email"].port == 2525
+
+
+def test_build_sender_enables_github_from_env():
+    ms = build_sender(env={"GITHUB_TOKEN": "t", "GITHUB_REPOSITORY": "o/r"})
+    assert isinstance(ms._senders["github"], GitHubSender)
+
+
+def test_build_sender_dry_run_handles_github():
+    ms = build_sender(dry_run=True, env={})
+    ms.send(_note("github", "octocat"))  # no error, recorded by the dry sender
+
+
+class _FakeApi:
+    """Records GitHub API calls and returns canned responses."""
+
+    def __init__(self, existing_pr=None, fail_reviewer=False):
+        self.calls = []
+        self._existing = existing_pr
+        self._fail_reviewer = fail_reviewer
+
+    def __call__(self, method, path, body=None):
+        self.calls.append((method, path, body))
+        if method == "GET" and "/pulls?" in path:
+            return [{"number": self._existing}] if self._existing else []
+        if method == "POST" and path.endswith("/pulls"):
+            return {"number": 42}
+        if method == "POST" and path.endswith("/requested_reviewers"):
+            if self._fail_reviewer:
+                raise urllib.error.HTTPError(path, 422, "unprocessable", {}, None)
+            return {}
+        return {}
+
+    def paths(self):
+        return [(m, p.split("?")[0]) for m, p, _ in self.calls]
+
+
+def test_github_opens_pr_and_requests_reviewer():
+    api = _FakeApi()
+    GitHubSender("tok", "growth-beaker/hureva", api=api).send(_note("github", "elena"))
+    assert ("POST", "/repos/growth-beaker/hureva/pulls") in api.paths()          # created PR
+    assert any(p.endswith("/requested_reviewers") for _, p in api.paths())       # requested
+
+
+def test_github_reuses_existing_pr():
+    api = _FakeApi(existing_pr=7)
+    GitHubSender("t", "o/r", api=api).send(_note("github", "a"))
+    assert not any(m == "POST" and p.endswith("/pulls") for m, p in api.paths())
+
+
+def test_github_falls_back_to_comment_when_request_rejected():
+    api = _FakeApi(fail_reviewer=True)
+    GitHubSender("t", "o/r", api=api).send(_note("github", "sam"))
+    assert any("/comments" in p for _, p in api.paths())
+
+
+def test_github_owner_event_comments_not_requests():
+    api = _FakeApi()
+    GitHubSender("t", "o/r", api=api).send(_note("github", "chris", event=Event.approved))
+    assert any("/comments" in p for _, p in api.paths())
+    assert not any(p.endswith("/requested_reviewers") for _, p in api.paths())
 
 
 class _FakeSlackClient:

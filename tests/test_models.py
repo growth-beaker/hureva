@@ -9,6 +9,7 @@ def test_person_requires_a_channel():
         Person()
     assert Person(email="a@b.com").email == "a@b.com"
     assert Person(slack="#x").slack == "#x"
+    assert Person(github="octocat").github == "octocat"
 
 
 def test_person_forbids_unknown_fields():
