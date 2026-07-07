@@ -21,7 +21,6 @@ dev = ["pytest>=8", "slack_sdk>=3"]
 [project.scripts]
 hureva-notify = "hureva.notify:main"
 hureva-gate = "hureva.gate:main"
-hureva-scaffold = "hureva.scaffold:main"
 hureva-new-spec = "hureva.new_spec:main"
 
 [tool.setuptools.packages.find]

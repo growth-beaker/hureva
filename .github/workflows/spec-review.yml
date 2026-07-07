@@ -1,0 +1,48 @@
+# Spec review & approval — runs directly in this repo (specs live here too).
+#
+# On a push to a spec branch, gate the changed specs and notify their reviewers.
+# Copy this file into any repo that stores its specs under `specs/`; the only
+# thing to change per repo is the specs path (two `--specs-dir` values) and, if
+# you want, flipping the gate to enforced.
+name: spec-review
+
+on:
+  push:
+    branches: ["spec/**"]     # status changes happen on spec branches (§7.4)
+    paths: ["specs/**"]       # ...and only when something under specs/ changed
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # both push commits reachable for transition detection
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"
+      # Advisory by default. Add --enforced to block un-approved specs (§6.3),
+      # and make this job a required check with branch protection.
+      - run: python -m hureva.gate --changed --specs-dir specs
+
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "hureva @ git+https://github.com/growth-beaker/hureva.git@v1"
+      - run: python -m hureva.notify --specs-dir specs
+        env:
+          # A channel is used only if its secret is set (Slack-only teams set just
+          # SLACK_BOT_TOKEN). The runner provides GITHUB_EVENT_PATH automatically.
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM: ${{ secrets.SMTP_FROM }}
