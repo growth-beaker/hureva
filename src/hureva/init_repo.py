@@ -327,6 +327,47 @@ def collect_team(default_login: str | None) -> tuple[list[dict], str, dict[str, 
 _WELCOME = "\n👋  Let's set up spec review in this repo.\n"
 
 
+def _preflight(target: Path) -> None:
+    """Friendly, non-blocking warnings before we invest in setup."""
+    import shutil
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(target), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True,
+        )
+        in_repo = result.returncode == 0 and result.stdout.strip() == "true"
+    except Exception:
+        in_repo = False
+    if not in_repo:
+        print("⚠  This doesn't look like a git repo. hureva's workflow runs on push,")
+        print("   so run `git init` and add a remote before you finish.\n")
+
+    if not shutil.which("gh"):
+        print("ℹ  GitHub CLI (gh) not found — I can't pre-fill your username, and")
+        print("   you'll add any repo secrets via the GitHub UI. That's fine.\n")
+
+
+def _confirm_team(people: list[dict], owner: str, roles: dict[str, list[str]]) -> bool:
+    """Show the collected team and confirm before writing anything."""
+    role_of = {k: _ROLE_LABELS[role] for role, keys in roles.items() for k in keys}
+    print("Here's your team:")
+    for p in people:
+        role = "owner" if p["key"] == owner else role_of.get(p["key"], "—")
+        print(f"  {p['key']:<14}{role}")
+    print()
+    return _confirm("Write these files?", default=True)
+
+
+_HOW_IT_WORKS = """\
+How it works:
+  • hureva-new-spec <slug> --title "…"  creates a spec on a spec/<slug> branch.
+  • Set status: in_review and push  →  your reviewers are notified.
+  • They approve → set status: approved → you build. (Enforce the gate later.)
+"""
+
+
 def _next_steps(specs_dir: str) -> str:
     return f"""\
 Next steps:
@@ -372,6 +413,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if interactive:
         print(_WELCOME)
+        _preflight(target)
     specs_dir = args.specs_dir or (
         _ask("Where should specs live?", "specs") if interactive else "specs"
     )
@@ -383,6 +425,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if interactive and not (roster_exists and not args.force):
         people, owner, roles = collect_team(_detect_github_login())
+        if not _confirm_team(people, owner, roles):
+            print("\nNo changes made — re-run `hureva-init` when you're ready.")
+            return 0
         files[roster_rel] = render_roster(people)
         files[defaults_rel] = render_defaults(owner, roles)
     else:
@@ -400,6 +445,8 @@ def main(argv: list[str] | None = None) -> int:
     if not written:
         print("\nNothing written; all files already exist.")
     print()
+    if interactive:
+        print(_HOW_IT_WORKS)
     print(_next_steps(specs_dir))
     return 0
 

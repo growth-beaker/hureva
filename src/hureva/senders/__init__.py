@@ -95,7 +95,7 @@ def build_sender(dry_run: bool = False, env: dict[str, str] | None = None) -> Mu
         senders["github"] = GitHubSender(
             token=env["GITHUB_TOKEN"],
             repository=env["GITHUB_REPOSITORY"],
-            base_branch=env.get("HUREVA_BASE_BRANCH", "main"),
+            base_branch=env.get("HUREVA_BASE_BRANCH"),  # None => auto-detect default
             api_url=env.get("GITHUB_API_URL", "https://api.github.com"),
         )
 

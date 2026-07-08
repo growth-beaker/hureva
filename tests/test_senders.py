@@ -61,15 +61,18 @@ def test_build_sender_dry_run_handles_github():
 class _FakeApi:
     """Records GitHub API calls and returns canned responses."""
 
-    def __init__(self, existing_pr=None, fail_reviewer=False):
+    def __init__(self, existing_pr=None, fail_reviewer=False, default_branch="main"):
         self.calls = []
         self._existing = existing_pr
         self._fail_reviewer = fail_reviewer
+        self._default_branch = default_branch
 
     def __call__(self, method, path, body=None):
         self.calls.append((method, path, body))
         if method == "GET" and "/pulls?" in path:
             return [{"number": self._existing}] if self._existing else []
+        if method == "GET" and "/pulls" not in path:   # GET /repos/{owner}/{repo}
+            return {"default_branch": self._default_branch}
         if method == "POST" and path.endswith("/pulls"):
             return {"number": 42}
         if method == "POST" and path.endswith("/requested_reviewers"):
@@ -93,6 +96,21 @@ def test_github_reuses_existing_pr():
     api = _FakeApi(existing_pr=7)
     GitHubSender("t", "o/r", api=api).send(_note("github", "a"))
     assert not any(m == "POST" and p.endswith("/pulls") for m, p in api.paths())
+
+
+def test_github_targets_repo_default_branch():
+    api = _FakeApi(default_branch="trunk")
+    GitHubSender("t", "o/r", api=api).send(_note("github", "a"))
+    create = next(b for m, p, b in api.calls if m == "POST" and p.endswith("/pulls"))
+    assert create["base"] == "trunk"
+
+
+def test_github_explicit_base_skips_lookup():
+    api = _FakeApi(default_branch="trunk")
+    GitHubSender("t", "o/r", base_branch="release", api=api).send(_note("github", "a"))
+    create = next(b for m, p, b in api.calls if m == "POST" and p.endswith("/pulls"))
+    assert create["base"] == "release"
+    assert not any(m == "GET" and "/pulls" not in p for m, p, _ in api.calls)  # no repo GET
 
 
 def test_github_falls_back_to_comment_when_request_rejected():

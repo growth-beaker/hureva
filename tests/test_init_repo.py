@@ -2,6 +2,7 @@ import yaml
 
 from hureva.frontmatter import parse_spec
 from hureva.init_repo import (
+    _confirm_team,
     collect_team,
     main,
     render_defaults,
@@ -108,3 +109,17 @@ def test_collect_team_solo(monkeypatch):
     assert people == [{"key": "sam", "github": "sam-gh"}]
     assert owner == "sam"
     assert roles == {"approvers": [], "commenters": [], "viewers": []}
+
+
+def test_confirm_team_shows_roles_and_returns_choice(monkeypatch, capsys):
+    people = [{"key": "chris", "github": "c"}, {"key": "elena", "github": "e"}]
+    roles = {"approvers": ["elena"], "commenters": [], "viewers": []}
+
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "n")
+    assert _confirm_team(people, "chris", roles) is False
+    out = capsys.readouterr().out
+    assert "chris" in out and "owner" in out
+    assert "elena" in out and "approver" in out
+
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "y")
+    assert _confirm_team(people, "chris", roles) is True

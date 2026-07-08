@@ -30,7 +30,7 @@ class GitHubSender(Sender):
         self,
         token: str,
         repository: str,                 # "owner/name" (from $GITHUB_REPOSITORY)
-        base_branch: str = "main",
+        base_branch: str | None = None,  # None => auto-detect the repo default branch
         api_url: str = "https://api.github.com",
         api=None,                        # injectable transport for tests
     ):
@@ -40,6 +40,17 @@ class GitHubSender(Sender):
         self._api_url = api_url.rstrip("/")
         self._api = api or self._http
         self._pr: dict[str, int] = {}    # slug -> PR number (cached within a run)
+
+    def _base_branch(self) -> str:
+        """The PR base — the repo's default branch, resolved once and cached.
+
+        Not everyone's default branch is ``main`` (``master``/``trunk`` exist), so
+        we ask the API rather than assume, unless a base was passed explicitly.
+        """
+        if self._base is None:
+            repo = self._api("GET", f"/repos/{self._repo}")
+            self._base = repo.get("default_branch", "main")
+        return self._base
 
     # --- HTTP (stdlib) --------------------------------------------------------
 
@@ -74,7 +85,7 @@ class GitHubSender(Sender):
                 {
                     "title": notification.subject,
                     "head": head,
-                    "base": self._base,
+                    "base": self._base_branch(),
                     "body": notification.body,
                 },
             )
