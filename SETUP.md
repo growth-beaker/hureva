@@ -16,13 +16,15 @@ From the root of your repo:
 
 ```bash
 pip install hureva
-hureva-init            # asks where specs live, then scaffolds the files
+hureva-init            # interactive: builds your roster, writes the workflow
 ```
 
-`hureva-init` writes the workflow and config files and prints a checklist for the
-parts that can't be scaffolded (fill the roster, commit, GitBook — plus Slack/email
-only if you use them). Follow that
-checklist and you're done. The rest of this document is the same steps in detail.
+`hureva-init` walks you through adding yourself and your teammates (it pre-fills
+your GitHub username), writes the workflow and config from your answers, and prints
+a short checklist for the rest (commit, GitBook — plus Slack/email only if you use
+them). Follow that checklist and you're done. The rest of this document is the same
+steps in detail, and the fallback if you'd rather edit the files by hand
+(`hureva-init --sample` writes a placeholder roster instead of asking).
 
 ---
 
@@ -87,7 +89,9 @@ Create `.github/workflows/spec-review.yml` in your repo with the YAML above.
 
 ## Step 2 — Add your config
 
-*(`hureva-init` wrote starter versions of these — edit them with your real team.)*
+*(If you ran `hureva-init` interactively, `roster.yml` and `defaults.yml` already
+hold the team you entered — review them and skip to Step 3. This section is for
+editing by hand or after `--sample`.)*
 
 Two files under `specs/` (or your chosen path). Everything references people by
 **roster key** (short name), never by inline handles.

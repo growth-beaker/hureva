@@ -1,9 +1,14 @@
-"""hureva-init — scaffold spec review into the current repo, then guide the rest.
+"""hureva-init — friendly, interactive setup for spec review in the current repo.
 
-Run once in your repo after `pip install hureva`. It writes the workflow and the
-config files (asking only for the specs path), skips anything that already exists,
-and prints a checklist for the steps that can't be automated (Slack app, secret,
-commit, GitBook). It touches nothing else — no git, no secrets, no network.
+Run once after `pip install hureva`. It asks where specs live, then walks you
+through building the team roster — starting with you and encouraging you to add
+teammates — and writes the workflow, config, and Claude aids. It skips files that
+already exist, and prints a short checklist for the rest (commit, GitBook, and
+Slack/email only if you use them).
+
+Non-interactive (piped, CI, or `--sample`) falls back to writing a sample roster,
+so automation still works. It never commits or sets secrets; the only network call
+is a best-effort `gh api user` to pre-fill your GitHub username.
 """
 
 from __future__ import annotations
@@ -59,8 +64,7 @@ jobs:
 """
 
 
-def _roster() -> str:
-    return """\
+_ROSTER_HEADER = """\
 # Central team roster: the only place channels are defined. People are referenced
 # everywhere by their key here (name-only); a name missing from this file fails
 # loudly rather than silently.
@@ -71,22 +75,45 @@ def _roster() -> str:
 #   slack:  "<U-id>"     — needs the SLACK_BOT_TOKEN secret (member ID or #channel).
 #   email:  <addr>       — needs the SMTP_* secrets.
 people:
-  chris:   { github: chris }
-  elena:   { github: elena-pm }
-  sam:     { github: sam-ux }
-  qa-team: { github: qa-lead }
 """
 
 
-def _defaults() -> str:
-    return """\
-# Default review assignment, copied into a NEW spec's frontmatter at creation,
-# then freely overridden per spec. A seed, not a runtime fallback.
-owner: chris
-approvers: [elena]
-commenters: [sam]
-viewers: [qa-team]
-"""
+def render_roster(people: list[dict]) -> str:
+    """Render roster.yml from collected people ({key, github})."""
+    lines = [_ROSTER_HEADER.rstrip("\n")]
+    for p in people:
+        lines.append(f"  {p['key']}: {{ github: {p['github']} }}")
+    return "\n".join(lines) + "\n"
+
+
+def render_defaults(owner: str, roles: dict[str, list[str]]) -> str:
+    """Render defaults.yml from an owner and role→keys mapping."""
+    fmt = lambda xs: "[" + ", ".join(xs) + "]"  # noqa: E731
+    return (
+        "# Default review assignment, copied into a NEW spec's frontmatter at\n"
+        "# creation, then freely overridden per spec. A seed, not a runtime fallback.\n"
+        f"owner: {owner}\n"
+        f"approvers: {fmt(roles.get('approvers', []))}\n"
+        f"commenters: {fmt(roles.get('commenters', []))}\n"
+        f"viewers: {fmt(roles.get('viewers', []))}\n"
+    )
+
+
+def _sample_roster() -> str:
+    return render_roster(
+        [
+            {"key": "chris", "github": "chris"},
+            {"key": "elena", "github": "elena-pm"},
+            {"key": "sam", "github": "sam-ux"},
+            {"key": "qa-team", "github": "qa-lead"},
+        ]
+    )
+
+
+def _sample_defaults() -> str:
+    return render_defaults(
+        "chris", {"approvers": ["elena"], "commenters": ["sam"], "viewers": ["qa-team"]}
+    )
 
 
 def _spec_template() -> str:
@@ -183,23 +210,28 @@ to open it for review; when they are, set `status: in_review` and push the
 """
 
 
-def render_files(specs_dir: str = "specs") -> dict[str, str]:
-    """The whole scaffold as {relative_path: content}."""
+def _static_files(specs_dir: str) -> dict[str, str]:
+    """The scaffold files that aren't roster/defaults."""
     return {
         ".github/workflows/spec-review.yml": _workflow(specs_dir),
-        f"{specs_dir}/roster.yml": _roster(),
-        f"{specs_dir}/defaults.yml": _defaults(),
         f"{specs_dir}/spec.template.md": _spec_template(),
         "CLAUDE.md": _claude_md(specs_dir),
         ".claude/commands/new-spec.md": _new_spec_cmd(specs_dir),
     }
 
 
-def scaffold(target: Path, specs_dir: str, force: bool) -> tuple[list[str], list[str]]:
-    """Write the scaffold. Returns (written, skipped) relative paths."""
+def render_files(specs_dir: str = "specs") -> dict[str, str]:
+    """The whole scaffold as {relative_path: content}, using the sample roster."""
+    files = _static_files(specs_dir)
+    files[f"{specs_dir}/roster.yml"] = _sample_roster()
+    files[f"{specs_dir}/defaults.yml"] = _sample_defaults()
+    return files
+
+
+def _write(target: Path, files: dict[str, str], force: bool) -> tuple[list[str], list[str]]:
     written: list[str] = []
     skipped: list[str] = []
-    for rel, content in render_files(specs_dir).items():
+    for rel, content in files.items():
         dest = target / rel
         if dest.exists() and not force:
             skipped.append(rel)
@@ -210,68 +242,165 @@ def scaffold(target: Path, specs_dir: str, force: bool) -> tuple[list[str], list
     return written, skipped
 
 
-def _prompt_specs_dir(default: str = "specs") -> str:
-    if not sys.stdin.isatty():  # non-interactive (CI, pipe) — take the default
-        return default
+def scaffold(target: Path, specs_dir: str, force: bool) -> tuple[list[str], list[str]]:
+    """Write the scaffold with the sample roster. Returns (written, skipped)."""
+    return _write(target, render_files(specs_dir), force)
+
+
+# --- interactive prompts --------------------------------------------------------
+
+_ROLE_LABELS = {"approvers": "approver", "commenters": "commenter", "viewers": "viewer"}
+
+
+def _ask(question: str, default: str | None = None) -> str:
+    suffix = f" [{default}]" if default else ""
     try:
-        answer = input(f"Where should specs live? [{default}]: ").strip()
+        answer = input(f"{question}{suffix}: ").strip()
+    except EOFError:
+        return default or ""
+    return answer or (default or "")
+
+
+def _confirm(question: str, default: bool = True) -> bool:
+    hint = "Y/n" if default else "y/N"
+    try:
+        answer = input(f"{question} [{hint}]: ").strip().lower()
     except EOFError:
         return default
-    return answer or default
+    if not answer:
+        return default
+    return answer.startswith("y")
 
 
-_CHECKLIST = """\
-Next steps (the parts that can't be scaffolded):
+def _detect_github_login() -> str | None:
+    """Best-effort current GitHub username via the gh CLI (None if unavailable)."""
+    import subprocess
 
-  1. Fill in {specs_dir}/roster.yml and {specs_dir}/defaults.yml with your team.
+    try:
+        result = subprocess.run(
+            ["gh", "api", "user", "-q", ".login"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception:
+        return None
+    return result.stdout.strip() or None if result.returncode == 0 else None
 
-  2. Create a Slack app + bot token:
-       - https://api.slack.com/apps  →  Create New App  →  From scratch
-       - Bot Token Scopes: chat:write, users:read.email
-       - Install to Workspace, copy the xoxb-… token, invite the bot to channels
 
-  3. Add the token as a repo secret named SLACK_BOT_TOKEN:
-       gh secret set SLACK_BOT_TOKEN
-     (or Settings → Secrets and variables → Actions)
+def _ask_role(key: str) -> str:
+    print(f"    What can {key} do?")
+    print("      1) approve  — review and sign off")
+    print("      2) comment  — suggest, but not approve")
+    print("      3) view     — read-only")
+    choice = _ask("    Choose 1/2/3", "1")
+    return {"1": "approvers", "2": "commenters", "3": "viewers"}.get(choice, "approvers")
 
-  4. Commit and push to your default branch, then merge:
+
+def collect_team(default_login: str | None) -> tuple[list[dict], str, dict[str, list[str]]]:
+    """Interactively build the roster. Returns (people, owner_key, roles)."""
+    print("\nLet's build your team roster — everyone here can be pinged for review.")
+    print("We'll start with you.\n")
+    you = _ask("Your short name (e.g. 'chris')", default_login or "me")
+    you_gh = _ask(f"{you}'s GitHub username", default_login or you)
+    people = [{"key": you, "github": you_gh}]
+    roles: dict[str, list[str]] = {"approvers": [], "commenters": [], "viewers": []}
+
+    print(f"\n✓ You're the owner, {you} — you'll drive specs and kick off builds.\n")
+    print("Now add teammates who should review — PM, UX, QA, other devs.")
+    print("The more reviewers you add, the more coverage each spec gets.\n")
+    while _confirm("Add a teammate?", default=True):
+        key = _ask("  Their short name")
+        if not key:
+            break
+        github = _ask(f"  {key}'s GitHub username", key)
+        role = _ask_role(key)
+        people.append({"key": key, "github": github})
+        roles[role].append(key)
+        label = _ROLE_LABELS[role]
+        article = "an" if label[0] in "aeiou" else "a"
+        print(f"  ✓ Added {key} as {article} {label}.\n")
+
+    if len(people) == 1:
+        print("(Flying solo for now — add teammates any time by editing roster.yml.)\n")
+    return people, you, roles
+
+
+_WELCOME = "\n👋  Let's set up spec review in this repo.\n"
+
+
+def _next_steps(specs_dir: str) -> str:
+    return f"""\
+Next steps:
+
+  1. Make sure everyone in {specs_dir}/roster.yml can access this repo — they're
+     requested as GitHub reviewers, so they need to see it.
+
+  2. Commit and push to your default branch, then merge:
        git add .github/workflows/spec-review.yml {specs_dir} CLAUDE.md .claude/
        git commit -m "Add spec review & approval workflow"
 
-  5. Connect your docs tool (GitBook/ReadMe): enable git sync at this repo and map
-     roles → permissions (viewers→read, commenters→comment, approvers→edit, owner→admin).
-
-  6. Create your first spec:
+  3. Create your first spec:
        hureva-new-spec <slug> --title "Feature title" --specs-dir {specs_dir}
 
-See SETUP.md for the full walkthrough.\
-"""
+  Optional:
+   • Prefer Slack or email for someone? Edit their entry in {specs_dir}/roster.yml
+     (github → slack/email) and add the matching repo secret. See SETUP.md.
+   • Connect GitBook/ReadMe git-sync for a non-Git review surface.
+
+See SETUP.md for the full walkthrough."""
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="hureva-init",
-        description="Scaffold spec review into this repo, then print next steps.",
+        description="Set up spec review in this repo (interactive), then print next steps.",
     )
     parser.add_argument(
         "--specs-dir",
-        help="where specs live (default: prompt, or 'specs' when non-interactive)",
+        help="where specs live (default: ask, or 'specs' when non-interactive)",
     )
     parser.add_argument("--into", default=".", help="target repo directory (default: .)")
     parser.add_argument("--force", action="store_true", help="overwrite existing files")
+    parser.add_argument(
+        "--sample",
+        action="store_true",
+        help="skip the interactive team setup; write the sample roster",
+    )
     args = parser.parse_args(argv)
 
-    specs_dir = args.specs_dir or _prompt_specs_dir()
-    written, skipped = scaffold(Path(args.into), specs_dir, args.force)
+    target = Path(args.into)
+    interactive = sys.stdin.isatty() and not args.sample
 
+    if interactive:
+        print(_WELCOME)
+    specs_dir = args.specs_dir or (
+        _ask("Where should specs live?", "specs") if interactive else "specs"
+    )
+
+    files = _static_files(specs_dir)
+    roster_rel = f"{specs_dir}/roster.yml"
+    defaults_rel = f"{specs_dir}/defaults.yml"
+    roster_exists = (target / roster_rel).exists()
+
+    if interactive and not (roster_exists and not args.force):
+        people, owner, roles = collect_team(_detect_github_login())
+        files[roster_rel] = render_roster(people)
+        files[defaults_rel] = render_defaults(owner, roles)
+    else:
+        files[roster_rel] = _sample_roster()
+        files[defaults_rel] = _sample_defaults()
+
+    written, skipped = _write(target, files, args.force)
+
+    print("\n✅  Scaffolded:" if interactive else "")
     for rel in written:
-        print(f"  created  {rel}")
+        print(f"     {rel}" if interactive else f"  created  {rel}")
     for rel in skipped:
-        print(f"  skipped  {rel} (exists — use --force to overwrite)")
+        print(f"     {rel} (kept — already existed)" if interactive
+              else f"  skipped  {rel} (exists — use --force to overwrite)")
     if not written:
         print("\nNothing written; all files already exist.")
     print()
-    print(_CHECKLIST.format(specs_dir=specs_dir))
+    print(_next_steps(specs_dir))
     return 0
 
 
