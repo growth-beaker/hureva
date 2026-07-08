@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hureva"
-version = "1.0.0"
+version = "1.1.0"
 description = "Spec review & approval workflow: frontmatter contract, transition detection, role→person→channel routing, and a status gate."
 readme = "README.md"
 requires-python = ">=3.12"

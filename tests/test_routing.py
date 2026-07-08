@@ -33,6 +33,11 @@ def test_resolve_channel_falls_back_to_email(roster):
     assert r.channel == "email" and r.handle == "sam@acme.com"
 
 
+def test_resolve_channel_github(roster):
+    r = resolve_channel(roster, "dana")
+    assert r.channel == "github" and r.handle == "dana-gh"
+
+
 def test_resolve_channel_missing_raises(roster):
     with pytest.raises(RosterResolutionError):
         resolve_channel(roster, "ghost")

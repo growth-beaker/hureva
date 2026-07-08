@@ -13,6 +13,7 @@ def roster() -> Roster:
             "elena": Person(email="elena@acme.com", slack="@elena"),
             "sam": Person(email="sam@acme.com"),  # email only
             "qa-team": Person(slack="#qa"),  # slack only, group
+            "dana": Person(github="dana-gh"),  # github only
         }
     )
 

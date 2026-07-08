@@ -11,6 +11,12 @@ on:
     branches: ["spec/**"]     # status changes happen on spec branches (§7.4)
     paths: ["specs/**"]       # ...and only when something under specs/ changed
 
+# Lets the GitHub notify channel open a PR and request reviewers with the
+# built-in GITHUB_TOKEN — no extra secret needed.
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   spec-review:
     runs-on: ubuntu-latest
@@ -26,7 +32,9 @@ jobs:
       # GITHUB_EVENT_PATH automatically (used for the before/after commits).
       - run: hureva-notify --specs-dir specs
         env:
-          # A channel is used only if its secret is set.
+          # GitHub channel: works out of the box, no secret to set.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Slack / email are used only if their secret is set.
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

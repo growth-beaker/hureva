@@ -45,10 +45,11 @@ def recipients_for_event(spec: SpecFrontmatter, event: Event) -> list[str]:
 
 
 def resolve_channel(roster: Roster, person: str) -> ResolvedRecipient:
-    """Resolve one person key to a channel. Slack if present, else email.
+    """Resolve one person key to a channel, in preference order: slack, email, github.
 
-    Raises :class:`RosterResolutionError` if the person is absent, or has no
-    usable channel (which the roster model already forbids, but we guard anyway).
+    Order only breaks ties: to reach someone on a specific channel, list only that
+    handle for them. Raises :class:`RosterResolutionError` if the person is absent
+    or has no handle (which the roster model already forbids, but we guard anyway).
     """
     entry = roster.get(person)
     if entry is None:
@@ -57,6 +58,8 @@ def resolve_channel(roster: Roster, person: str) -> ResolvedRecipient:
         return ResolvedRecipient(person=person, channel="slack", handle=entry.slack)
     if entry.email:
         return ResolvedRecipient(person=person, channel="email", handle=entry.email)
+    if entry.github:
+        return ResolvedRecipient(person=person, channel="github", handle=entry.github)
     raise RosterResolutionError([person])
 
 

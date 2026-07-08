@@ -115,19 +115,24 @@ hureva-gate <slug> --require-all-approvers   # gate one spec by slug
 `hureva-notify` / `hureva-gate --changed` read the GitHub push event
 (`$GITHUB_EVENT_PATH`, set by the runner; or `--event-file`) to get the
 `before`/`after` commits. Recipients come from the spec's frontmatter roles; each
-channel resolves from `roster.yml` (Slack if present, else email). A name missing
-from the roster is reported loudly, never dropped silently.
+person's channel is their handle in `roster.yml`. A name missing from the roster
+is reported loudly, never dropped silently.
 
 ## Channels
 
-Delivery is enabled by the environment (§13.6):
+Each person is reached on the channel whose handle you give them in `roster.yml`
+(list only one; the order below breaks ties):
 
-- **Slack** — set `SLACK_BOT_TOKEN`. Handles: `#channel`, a member ID (`U…`), or an
-  email (DM resolved via `users.lookupByEmail`).
-- **SMTP email** — set `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
-  `SMTP_FROM`). Optional; a Slack-only team just doesn't set it.
+- **GitHub** — `github: <username>`. **No setup** — the workflow's built-in
+  `GITHUB_TOKEN` opens a PR for the spec branch and requests the person as a
+  reviewer, so GitHub emails/notifies them. They just need access to the repo.
+- **Slack** — `slack: "<U-id>"`; set the `SLACK_BOT_TOKEN` secret. Handles:
+  `#channel`, a member ID (`U…`), or an email (DM via `users.lookupByEmail`).
+- **SMTP email** — `email: <addr>`; set `SMTP_HOST` (+ `SMTP_PORT`, `SMTP_USERNAME`,
+  `SMTP_PASSWORD`, `SMTP_FROM`).
 
-A channel is used only if its secret is present. `--dry-run` needs no credentials.
+GitHub works out of the box; Slack/email activate only when their secret is set.
+`--dry-run` needs no credentials.
 
 ## Develop
 
